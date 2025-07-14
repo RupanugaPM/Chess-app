@@ -329,7 +329,8 @@ while True: # game loop
     l.show()
 
     keys = pygame.key.get_pressed()
-    #moving charecter
+    #moving character
+
     """if keys[pygame.K_a]:
         time.sleep(1)"""
     pygame.display.update()
