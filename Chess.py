@@ -200,7 +200,6 @@ class Game:
                     self.dragger.update_blit(self.screen, self.piece_font)
                 self.handle_playing_events()
                 if self.ai_mode and self.turn == 'black':
-                    pygame.display.update()
                     self.ai_move()
             elif self.gamestate == GameState.PROMOTING:
                 self.show_bg()
@@ -337,9 +336,12 @@ class Game:
                 if 0 <= r < ROWS and 0 <= c < COLS and (board.squares[r][c] == 0 or board.squares[r][c].color != piece.color):
                     moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(c, r)))
 
-        elif isinstance(piece, Bishop): add_line_moves([(1,1), (1,-1), (-1,1), (-1,-1)])
-        elif isinstance(piece, Rook): add_line_moves([(1,0), (-1,0), (0,1), (0,-1)])
-        elif isinstance(piece, Queen): add_line_moves([(1,1), (1,-1), (-1,1), (-1,-1), (1,0), (-1,0), (0,1), (0,-1)])
+        elif isinstance(piece, Bishop): 
+            add_line_moves([(1,1), (1,-1), (-1,1), (-1,-1)])
+        elif isinstance(piece, Rook): 
+            add_line_moves([(1,0), (-1,0), (0,1), (0,-1)])
+        elif isinstance(piece, Queen): 
+            add_line_moves([(1,1), (1,-1), (-1,1), (-1,-1), (1,0), (-1,0), (0,1), (0,-1)])
         elif isinstance(piece, King):
             for dr, dc in [(dr, dc) for dr in [-1,0,1] for dc in [-1,0,1] if (dr, dc) != (0,0)]:
                 r, c = row + dr, col + dc
@@ -384,7 +386,6 @@ class Game:
     # --- AI Methods ---
     def ai_move(self):
         if self.turn == 'black' and not self.game_over_message:
-            pygame.time.wait(500)
             all_moves = [(p, m) for r in self.board.squares for p in r if p != 0 and p.color == 'black' for m in p.moves]
             if all_moves:
                 self.make_move(*random.choice(all_moves))
@@ -403,10 +404,16 @@ class Game:
     
     def handle_menu_events(self):
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: pygame.quit(), sys.exit()
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if self.pvp_rect.collidepoint(event.pos): self.ai_mode, self.gamestate = False, GameState.PLAYING; self.reset()
-                elif self.pve_rect.collidepoint(event.pos): self.ai_mode, self.gamestate = True, GameState.PLAYING; self.reset()
+                if self.pvp_rect.collidepoint(event.pos): 
+                    self.ai_mode, self.gamestate = False, GameState.PLAYING
+                    self.reset()
+                elif self.pve_rect.collidepoint(event.pos): 
+                    self.ai_mode, self.gamestate = True, GameState.PLAYING
+                    self.reset()
 
     def show_promotion_menu(self):
         row, col = self.promotion_pos
@@ -433,7 +440,9 @@ class Game:
                         return
                         
     def show_game_over(self):
-        s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); s.fill(GAME_OVER_BG_COLOR); self.screen.blit(s, (0, 0))
+        s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        s.fill(GAME_OVER_BG_COLOR)
+        self.screen.blit(s, (0, 0))
         text = pygame.font.Font(None, 60).render(self.game_over_message, True, FONT_COLOR)
         prompt = pygame.font.Font(None, 40).render("Click to return to menu.", True, FONT_COLOR)
         self.screen.blit(text, text.get_rect(center=(WIDTH/2, HEIGHT/2 - 20)))
@@ -441,8 +450,12 @@ class Game:
 
     def handle_game_over_events(self):
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: pygame.quit(), sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN: self.gamestate = GameState.MENU; self.reset()
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN: 
+                self.gamestate = GameState.MENU
+                self.reset()
 
 if __name__ == '__main__':
     game = Game()
