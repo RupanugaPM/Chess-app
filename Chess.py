@@ -3,6 +3,9 @@ import pygame
 import sys
 import copy
 import random
+import stockfish 
+import chess
+
 
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
@@ -172,11 +175,16 @@ class Game:
 
         self.gamestate = GameState.MENU
         self.board = None
+        self.mouse_position = (0, 0)
         self.dragger = Dragger()
         self.turn = 'white'
         self.promotion_pos = None
         self.game_over_message = ""
         self.ai_mode = False
+        self.menu_font_color = FONT_COLOR
+        self.menu_title_color = WHITE_SQUARE
+        self.menu_background_color = MENU_BG_COLOR
+        self.menu_font_animated_color = (255, 150, 150)  # Highlight color for menu buttons
 
     def reset(self):
         self.board = Board()
@@ -190,6 +198,7 @@ class Game:
         while True:
             if self.gamestate == GameState.MENU:
                 self.show_menu()
+                self.handle_menu_animations()
                 self.handle_menu_events()
             elif self.gamestate == GameState.PLAYING:
                 self.show_bg()
@@ -393,14 +402,23 @@ class Game:
     # --- UI and State Handlers ---
     def show_menu(self):
         self.screen.fill(MENU_BG_COLOR)
-        title = pygame.font.Font(None, 74).render('Python Chess', True, WHITE_SQUARE)
+        title = pygame.font.Font(None, 74).render('Python Chess', True, self.menu_title_color)
         self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 150))
-        pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, FONT_COLOR)
-        pve_button = pygame.font.Font(None, 50).render('1 vs AI', True, FONT_COLOR)
-        self.pvp_rect = pvp_button.get_rect(center=(WIDTH/2, 350))
-        self.pve_rect = pve_button.get_rect(center=(WIDTH/2, 450))
-        self.screen.blit(pvp_button, self.pvp_rect)
-        self.screen.blit(pve_button, self.pve_rect)
+        self.pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, self.menu_font_color)
+        self.pve_button = pygame.font.Font(None, 50).render('1 vs Random', True, self.menu_font_color)
+        self.pvp_rect = self.pvp_button.get_rect(center=(WIDTH//2, 350))
+        self.pve_rect = self.pve_button.get_rect(center=(WIDTH//2, 450))
+        self.screen.blit(self.pvp_button, self.pvp_rect)
+        self.screen.blit(self.pve_button, self.pve_rect)
+        
+    def handle_menu_animations(self):
+        self.mouse_position = pygame.mouse.get_pos()
+        if self.pvp_rect.collidepoint(self.mouse_position):
+            self.pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, self.menu_font_animated_color)
+            self.screen.blit(self.pvp_button, self.pvp_rect)
+        if self.pve_rect.collidepoint(self.mouse_position):
+            self.pve_button = pygame.font.Font(None, 50).render('1 vs Random', True, self.menu_font_animated_color)
+            self.screen.blit(self.pve_button, self.pve_rect)
     
     def handle_menu_events(self):
         for event in pygame.event.get():
