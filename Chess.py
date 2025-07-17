@@ -22,6 +22,7 @@ PIECE_COLORS = {'white': (255, 255, 255), 'black': (0, 0, 0)}
 
 # --- Colors ---
 BROWN = (181, 136, 99)
+LIGHT_RED = (255, 150, 150)
 WHITE_SQUARE = (240, 217, 181)
 HIGHLIGHT_COLOR = (100, 150, 255, 100)
 LEGAL_MOVE_COLOR = (0, 0, 0, 75)
@@ -96,6 +97,7 @@ class Board:
         self._create_board()
         self._add_pieces('white')
         self._add_pieces('black')
+        self._board = chess.Board()
 
     def _create_board(self):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
@@ -137,10 +139,14 @@ class Board:
     
     def promote_pawn(self, row, col, piece_name):
         color = self.squares[row][col].color
-        if piece_name == 'queen': self.squares[row][col] = Queen(color)
-        elif piece_name == 'rook': self.squares[row][col] = Rook(color)
-        elif piece_name == 'bishop': self.squares[row][col] = Bishop(color)
-        elif piece_name == 'knight': self.squares[row][col] = Knight(color)
+        if piece_name == 'queen': 
+            self.squares[row][col] = Queen(color)
+        elif piece_name == 'rook': 
+            self.squares[row][col] = Rook(color)
+        elif piece_name == 'bishop': 
+            self.squares[row][col] = Bishop(color)
+        elif piece_name == 'knight': 
+            self.squares[row][col] = Knight(color)
 
 class Dragger:
     def __init__(self):
@@ -155,10 +161,14 @@ class Dragger:
             text_rect = text_surface.get_rect(center=(self.mouseX, self.mouseY))
             surface.blit(text_surface, text_rect)
             
-    def update_mouse(self, pos): self.mouseX, self.mouseY = pos
-    def save_initial(self, pos): self.initial_row, self.initial_col = pos[1] // SQSIZE, pos[0] // SQSIZE
-    def drag_piece(self, piece): self.piece, self.dragging = piece, True
-    def undrag_piece(self): self.piece, self.dragging = None, False
+    def update_mouse(self, pos): 
+        self.mouseX, self.mouseY = pos
+    def save_initial(self, pos): 
+        self.initial_row, self.initial_col = pos[1] // SQSIZE, pos[0] // SQSIZE
+    def drag_piece(self, piece): 
+        self.piece, self.dragging = piece, True
+    def undrag_piece(self): 
+        self.piece, self.dragging = None, False
 
 # --- Game Class (Main Controller) ---
 class Game:
@@ -184,7 +194,7 @@ class Game:
         self.menu_font_color = FONT_COLOR
         self.menu_title_color = WHITE_SQUARE
         self.menu_background_color = MENU_BG_COLOR
-        self.menu_font_animated_color = (255, 150, 150)  # Highlight color for menu buttons
+        self.menu_font_animated_color = LIGHT_RED  # Highlight color for menu buttons
 
     def reset(self):
         self.board = Board()
@@ -272,7 +282,8 @@ class Game:
                 initial = pygame.math.Vector2(self.dragger.initial_col, self.dragger.initial_row)
                 final = pygame.math.Vector2(released_col, released_row)
                 move = Move(initial, final)
-                if move in self.dragger.piece.moves: self.make_move(self.dragger.piece, move)
+                if move in self.dragger.piece.moves: 
+                    self.make_move(self.dragger.piece, move)
                 self.dragger.undrag_piece()
 
     # --- Game Logic Methods ---
@@ -298,7 +309,7 @@ class Game:
 
     def calc_moves(self, piece, row, col, board):
         piece.clear_moves()
-        raw_moves = self._get_raw_moves(piece, row, col, board)
+        raw_moves = self._get_all_raw_moves(piece, row, col, board)
         for move in raw_moves:
             self.add_valid_move(piece, move, board)
 
@@ -309,6 +320,16 @@ class Game:
         if not self.is_in_check(piece.color, temp_board):
             piece.add_move(move)
 
+    def _get_all_raw_moves(self, piece, row, col, board):
+        moves=self._get_raw_moves(piece, row, col, board)
+        if isinstance(piece, King) and not piece.moved:
+            if isinstance(board.squares[row][0], Rook) and not board.squares[row][0].moved and all(board.squares[row][c] == 0 for c in [1, 2, 3]) and not self.is_in_check(piece.color, board) and not self.is_in_check_at(piece.color, row, col-1, board) and not self.is_in_check_at(piece.color, row, col-2, board):
+                moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(col - 2, row)))
+            if isinstance(board.squares[row][7], Rook) and not board.squares[row][7].moved and all(board.squares[row][c] == 0 for c in [5, 6]) and not self.is_in_check(piece.color, board) and not self.is_in_check_at(piece.color, row, col+1, board) and not self.is_in_check_at(piece.color, row, col+2, board):
+                moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(col + 2, row)))
+        return moves
+
+    # This method is without castling logic
     def _get_raw_moves(self, piece, row, col, board):
         moves = []
         def add_line_moves(directions):
@@ -318,8 +339,10 @@ class Game:
                     dest = board.squares[r][c]
                     if dest == 0 or dest.color != piece.color:
                         moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(c, r)))
-                        if dest != 0: break
-                    else: break
+                        if dest != 0: 
+                            break
+                    else: 
+                        break
                     r, c = r + dr, c + dc
         
         if isinstance(piece, Pawn):
@@ -355,12 +378,7 @@ class Game:
             for dr, dc in [(dr, dc) for dr in [-1,0,1] for dc in [-1,0,1] if (dr, dc) != (0,0)]:
                 r, c = row + dr, col + dc
                 if 0 <= r < ROWS and 0 <= c < COLS and (board.squares[r][c] == 0 or board.squares[r][c].color != piece.color):
-                    moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(c, r)))
-            if not piece.moved:
-                if isinstance(board.squares[row][0], Rook) and not board.squares[row][0].moved and all(board.squares[row][c] == 0 for c in [1, 2, 3]) and not self.is_in_check(piece.color, board) and not self.is_in_check_at(piece.color, row, col-1, board) and not self.is_in_check_at(piece.color, row, col-2, board):
-                    moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(col - 2, row)))
-                if isinstance(board.squares[row][7], Rook) and not board.squares[row][7].moved and all(board.squares[row][c] == 0 for c in [5, 6]) and not self.is_in_check(piece.color, board) and not self.is_in_check_at(piece.color, row, col+1, board) and not self.is_in_check_at(piece.color, row, col+2, board):
-                   moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(col + 2, row)))
+                    moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(c, r)))   
         return moves
 
     def is_in_check(self, color, board_state):
@@ -455,8 +473,8 @@ class Game:
                         self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], name)
                         self.gamestate = GameState.PLAYING
                         self.next_turn()
-                        return
-                        
+                        return     
+
     def show_game_over(self):
         s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         s.fill(GAME_OVER_BG_COLOR)
