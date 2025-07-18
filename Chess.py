@@ -1,8 +1,8 @@
-# main.py
-import pygame
 import sys
+import os
 import copy
 import random
+import pygame
 import stockfish 
 import chess
 
@@ -98,11 +98,14 @@ class Board:
         self._add_pieces('white')
         self._add_pieces('black')
         self._board = chess.Board()
+        # TODO
+        # self.board_stockfish = stockfish.Stockfish(path=os.path.join(os.getcwd(), "stockfish"))
 
     def _create_board(self):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
     def _add_pieces(self, color):
+        
         pawn_row, back_row = (6, 7) if color == 'white' else (1, 0)
         for col in range(COLS):
             self.squares[pawn_row][col] = Pawn(color)
