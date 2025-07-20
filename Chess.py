@@ -308,6 +308,10 @@ class Game:
                 if move in self.dragger.piece.moves: 
                     self.make_move(self.dragger.piece, move)
                 self.dragger.undrag_piece()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.gamestate = GameState.MENU
+                    self.reset()
 
     # --- Game Logic Methods ---
     def make_move(self, piece, move):
@@ -445,22 +449,27 @@ class Game:
         self.screen.fill(MENU_BG_COLOR)
         title = pygame.font.Font(None, 74).render('Python Chess', True, self.menu_title_color)
         self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 150))
-        self.pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, self.menu_font_color)
-        self.pve_button = pygame.font.Font(None, 50).render('1 vs Random', True, self.menu_font_color)
-        self.pvp_rect = self.pvp_button.get_rect(center=(WIDTH//2, 350))
-        self.pve_rect = self.pve_button.get_rect(center=(WIDTH//2, 450))
-        self.screen.blit(self.pvp_button, self.pvp_rect)
-        self.screen.blit(self.pve_button, self.pve_rect)
+       
         
     def handle_menu_animations(self):
         self.mouse_position = pygame.mouse.get_pos()
-        if self.pvp_rect.collidepoint(self.mouse_position):
-            self.pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, self.menu_font_animated_color)
-            self.screen.blit(self.pvp_button, self.pvp_rect)
-        if self.pve_rect.collidepoint(self.mouse_position):
-            self.pve_button = pygame.font.Font(None, 50).render('1 vs Random', True, self.menu_font_animated_color)
-            self.screen.blit(self.pve_button, self.pve_rect)
-    
+        self.pvp_rect = self.menu_text('1 vs 1 (Local)', (WIDTH//2, 350), 50)
+        self.pve_rect = self.menu_text('1 vs Random', (WIDTH//2, 450), 50)
+      
+    def menu_text(self, text, center, size):
+        text_rect = pygame.font.Font(None, size).render(text, True, self.menu_font_color).get_rect(center=center)
+        if text_rect.collidepoint(self.mouse_position):
+            self.handle_text(text, self.menu_font_animated_color, center, size)
+        else:
+            self.handle_text(text, self.menu_font_color, center, size)
+        return text_rect
+
+    def handle_text(self, text, color, center, size):
+        text_surface = pygame.font.Font(None, size).render(text, True, color)
+        text_rect = text_surface.get_rect(center=center)
+        self.screen.blit(text_surface, text_rect)
+        
+
     def handle_menu_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
