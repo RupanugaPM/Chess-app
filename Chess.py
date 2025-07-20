@@ -1,4 +1,4 @@
-# --- Import Libraries ---
+# --Libraries--
 import sys
 import os
 import copy
