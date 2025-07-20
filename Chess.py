@@ -98,8 +98,7 @@ class Board:
         self._add_pieces('white')
         self._add_pieces('black')
         self._board = chess.Board()
-        # TODO
-        # self.board_stockfish = stockfish.Stockfish(path=os.path.join(os.getcwd(), "stockfish"))
+        self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
 
     def _create_board(self):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
@@ -150,6 +149,25 @@ class Board:
             self.squares[row][col] = Bishop(color)
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
+
+    def clone(self):
+        new = self.__class__.__new__(self.__class__)
+
+        new.squares = [
+            [copy.deepcopy(piece) for piece in row]
+            for row in self.squares
+        ]
+
+        new.last_move = copy.deepcopy(self.last_move)
+
+        new._board = self._board.copy()
+
+        new.board_stockfish = None
+
+        return new
+
+    def __deepcopy__(self, memo):
+        return self.clone()
 
 class Dragger:
     def __init__(self):
@@ -270,7 +288,9 @@ class Game:
     # --- Event Handling ---
     def handle_playing_events(self):
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: pygame.quit(), sys.exit()
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 self.dragger.update_mouse(event.pos)
                 clicked_row, clicked_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
