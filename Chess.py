@@ -172,6 +172,8 @@ class Board:
     def clone(self):
         new = self.__class__.__new__(self.__class__)
 
+        new.move_list = copy.deepcopy(self.move_list)
+
         new.squares = [
             [copy.deepcopy(piece) for piece in row]
             for row in self.squares
