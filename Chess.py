@@ -86,6 +86,13 @@ class Move:
     def __init__(self, initial, final):
         self.initial = initial # pygame.math.Vector2
         self.final = final   # pygame.math.Vector2
+        self.valid = self.check_valid
+
+    def check_valid(self):
+        return 0<=self.initial.x<8 and 0<=self.initial.y<8 and 0<=self.final.x<8 and 0<=self.final.y<8
+
+    def san(self):
+        return chr(97+self.initial.x)+chr(self.initial.y+1)+chr(97+self.final.x)+chr(self.final.y+1)
 
     def __eq__(self, other):
         return self.initial == other.initial and self.final == other.final
@@ -212,7 +219,7 @@ class Game:
         self.turn = 'white'
         self.promotion_pos = None
         self.game_over_message = ""
-        self.ai_mode = False
+        self.random_mode = False
         self.menu_font_color = FONT_COLOR
         self.menu_title_color = WHITE_SQUARE
         self.menu_background_color = MENU_BG_COLOR
@@ -240,8 +247,8 @@ class Game:
                 if self.dragger.dragging:
                     self.dragger.update_blit(self.screen, self.piece_font)
                 self.handle_playing_events()
-                if self.ai_mode and self.turn == 'black':
-                    self.ai_move()
+                if self.random_mode and self.turn == 'black':
+                    self.random_move()
             elif self.gamestate == GameState.PROMOTING:
                 self.show_bg()
                 self.show_pieces()
@@ -438,8 +445,7 @@ class Game:
             winner = 'Black' if self.turn == 'white' else 'White'
             self.game_over_message = f"Checkmate! {winner} wins." if self.is_in_check(self.turn, self.board) else "Stalemate! It's a draw."
     
-    # --- AI Methods ---
-    def ai_move(self):
+    def random_move(self):
         if self.turn == 'black' and not self.game_over_message:
             all_moves = [(p, m) for r in self.board.squares for p in r if p != 0 and p.color == 'black' for m in p.moves]
             if all_moves:
@@ -478,10 +484,10 @@ class Game:
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.pvp_rect.collidepoint(event.pos): 
-                    self.ai_mode, self.gamestate = False, GameState.PLAYING
+                    self.random_mode, self.gamestate = False, GameState.PLAYING
                     self.reset()
                 elif self.pve_rect.collidepoint(event.pos): 
-                    self.ai_mode, self.gamestate = True, GameState.PLAYING
+                    self.random_mode, self.gamestate = True, GameState.PLAYING
                     self.reset()
 
     def show_promotion_menu(self):
