@@ -92,21 +92,26 @@ class Move:
         return 0<=self.initial.x<8 and 0<=self.initial.y<8 and 0<=self.final.x<8 and 0<=self.final.y<8
 
     def san(self):
-        return chr(97+self.initial.x)+chr(self.initial.y+1)+chr(97+self.final.x)+chr(self.final.y+1)
+        return chr(97+int(self.initial.x))+str(8 - int(self.initial.y))+chr(97+int(self.final.x))+str(8 - int(self.final.y))
 
     def __eq__(self, other):
         return self.initial == other.initial and self.final == other.final
 
 # --- Board Class ---
 class Board:
-    def __init__(self):
+    def __init__(self, enable_stockfish = False):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
         self._create_board()
         self._add_pieces('white')
         self._add_pieces('black')
         self._board = chess.Board()
-        self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
+        self.board_stockfish = None
+        if enable_stockfish:
+            self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
+
+    def _enable_stockfish(self):
+        self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
 
     def _create_board(self):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
@@ -125,7 +130,10 @@ class Board:
         self.squares[back_row][6] = Knight(color)
         self.squares[back_row][7] = Rook(color)
 
-    def move(self, piece, move):
+    def move(self, piece, move, making_move = True):
+        if making_move:
+            self._board.push_san(move.san())
+
         initial_row, initial_col = int(move.initial.y), int(move.initial.x)
         final_row, final_col = int(move.final.y), int(move.final.x)
 
@@ -347,11 +355,11 @@ class Game:
         raw_moves = self._get_all_raw_moves(piece, row, col, board)
         for move in raw_moves:
             self.add_valid_move(piece, move, board)
-
+            
     def add_valid_move(self, piece, move, board):
         temp_board = copy.deepcopy(board)
         temp_piece = temp_board.squares[int(move.initial.y)][int(move.initial.x)]
-        temp_board.move(temp_piece, move)
+        temp_board.move(temp_piece, move, False)
         if not self.is_in_check(piece.color, temp_board):
             piece.add_move(move)
 
