@@ -313,7 +313,9 @@ class Game:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 self.dragger.update_mouse(event.pos)
                 clicked_row, clicked_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
-                piece = self.board.squares[clicked_row][clicked_col]
+                piece = 0 
+                if 0<=clicked_row<8 and 0<=clicked_col<8:
+                    piece = self.board.squares[clicked_row][clicked_col]
                 if piece != 0 and piece.color == self.turn:
                     self.dragger.save_initial(event.pos)
                     self.dragger.drag_piece(piece)
