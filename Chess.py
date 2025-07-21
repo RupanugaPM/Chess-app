@@ -314,7 +314,7 @@ class Game:
                 self.dragger.update_mouse(event.pos)
                 clicked_row, clicked_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
                 piece = 0 
-                if 0<=clicked_row<8 and 0<=clicked_col<8:
+                if 0<=clicked_row<ROWS and 0<=clicked_col<COLS:
                     piece = self.board.squares[clicked_row][clicked_col]
                 if piece != 0 and piece.color == self.turn:
                     self.dragger.save_initial(event.pos)
