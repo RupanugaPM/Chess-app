@@ -102,6 +102,7 @@ class Board:
     def __init__(self, enable_stockfish = False):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
+        self.move_list = []
         self._create_board()
         self._add_pieces('white')
         self._add_pieces('black')
@@ -131,7 +132,7 @@ class Board:
         self.squares[back_row][7] = Rook(color)
 
     def move(self, piece, move, making_move = True):
-        if making_move:
+        if making_move and self.check_promotion(piece, move.final) == False:
             self._board.push_san(move.san())
 
         initial_row, initial_col = int(move.initial.y), int(move.initial.x)
@@ -151,6 +152,7 @@ class Board:
         self.squares[final_row][final_col] = piece
         piece.moved = True
         self.last_move = move
+        self.move_list.append(move)
 
     def check_promotion(self, piece, final_pos):
         return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
@@ -165,6 +167,7 @@ class Board:
             self.squares[row][col] = Bishop(color)
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
+        self._board.push_san(self.last_move.san()+piece_name[0])
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
