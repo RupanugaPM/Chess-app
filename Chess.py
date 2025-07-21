@@ -104,7 +104,6 @@ class Board:
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
     def _add_pieces(self, color):
-        
         pawn_row, back_row = (6, 7) if color == 'white' else (1, 0)
         for col in range(COLS):
             self.squares[pawn_row][col] = Pawn(color)
