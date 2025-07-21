@@ -1,3 +1,4 @@
+# -- Libraries --
 import sys
 import os
 import copy
@@ -85,25 +86,39 @@ class Move:
     def __init__(self, initial, final):
         self.initial = initial # pygame.math.Vector2
         self.final = final   # pygame.math.Vector2
+        self.valid = self.check_valid
+
+    def check_valid(self):
+        return 0<=self.initial.x<8 and 0<=self.initial.y<8 and 0<=self.final.x<8 and 0<=self.final.y<8
+
+    def san(self):
+        return chr(97+int(self.initial.x))+str(8 - int(self.initial.y))+chr(97+int(self.final.x))+str(8 - int(self.final.y))
 
     def __eq__(self, other):
         return self.initial == other.initial and self.final == other.final
 
 # --- Board Class ---
 class Board:
-    def __init__(self):
+    def __init__(self, enable_stockfish = False):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
+        self.move_list = []
         self._create_board()
         self._add_pieces('white')
         self._add_pieces('black')
         self._board = chess.Board()
-        self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
+        self.board_stockfish = None
+        if enable_stockfish:
+            self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
+
+    def _enable_stockfish(self):
+        self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
 
     def _create_board(self):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
     def _add_pieces(self, color):
+        
         pawn_row, back_row = (6, 7) if color == 'white' else (1, 0)
         for col in range(COLS):
             self.squares[pawn_row][col] = Pawn(color)
@@ -116,7 +131,10 @@ class Board:
         self.squares[back_row][6] = Knight(color)
         self.squares[back_row][7] = Rook(color)
 
-    def move(self, piece, move):
+    def move(self, piece, move, making_move = True):
+        if making_move and self.check_promotion(piece, move.final) == False:
+            self._board.push_san(move.san())
+
         initial_row, initial_col = int(move.initial.y), int(move.initial.x)
         final_row, final_col = int(move.final.y), int(move.final.x)
 
@@ -134,6 +152,7 @@ class Board:
         self.squares[final_row][final_col] = piece
         piece.moved = True
         self.last_move = move
+        self.move_list.append(move)
 
     def check_promotion(self, piece, final_pos):
         return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
@@ -148,6 +167,7 @@ class Board:
             self.squares[row][col] = Bishop(color)
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
+        self._board.push_san(self.last_move.san()+piece_name[0])
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
@@ -210,7 +230,7 @@ class Game:
         self.turn = 'white'
         self.promotion_pos = None
         self.game_over_message = ""
-        self.ai_mode = False
+        self.random_mode = False
         self.menu_font_color = FONT_COLOR
         self.menu_title_color = WHITE_SQUARE
         self.menu_background_color = MENU_BG_COLOR
@@ -238,8 +258,8 @@ class Game:
                 if self.dragger.dragging:
                     self.dragger.update_blit(self.screen, self.piece_font)
                 self.handle_playing_events()
-                if self.ai_mode and self.turn == 'black':
-                    self.ai_move()
+                if self.random_mode and self.turn == 'black':
+                    self.random_move()
             elif self.gamestate == GameState.PROMOTING:
                 self.show_bg()
                 self.show_pieces()
@@ -307,6 +327,10 @@ class Game:
                 if move in self.dragger.piece.moves: 
                     self.make_move(self.dragger.piece, move)
                 self.dragger.undrag_piece()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.gamestate = GameState.MENU
+                    self.reset()
 
     # --- Game Logic Methods ---
     def make_move(self, piece, move):
@@ -334,11 +358,11 @@ class Game:
         raw_moves = self._get_all_raw_moves(piece, row, col, board)
         for move in raw_moves:
             self.add_valid_move(piece, move, board)
-
+            
     def add_valid_move(self, piece, move, board):
         temp_board = copy.deepcopy(board)
         temp_piece = temp_board.squares[int(move.initial.y)][int(move.initial.x)]
-        temp_board.move(temp_piece, move)
+        temp_board.move(temp_piece, move, False)
         if not self.is_in_check(piece.color, temp_board):
             piece.add_move(move)
 
@@ -432,8 +456,7 @@ class Game:
             winner = 'Black' if self.turn == 'white' else 'White'
             self.game_over_message = f"Checkmate! {winner} wins." if self.is_in_check(self.turn, self.board) else "Stalemate! It's a draw."
     
-    # --- AI Methods ---
-    def ai_move(self):
+    def random_move(self):
         if self.turn == 'black' and not self.game_over_message:
             all_moves = [(p, m) for r in self.board.squares for p in r if p != 0 and p.color == 'black' for m in p.moves]
             if all_moves:
@@ -444,22 +467,27 @@ class Game:
         self.screen.fill(MENU_BG_COLOR)
         title = pygame.font.Font(None, 74).render('Python Chess', True, self.menu_title_color)
         self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 150))
-        self.pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, self.menu_font_color)
-        self.pve_button = pygame.font.Font(None, 50).render('1 vs Random', True, self.menu_font_color)
-        self.pvp_rect = self.pvp_button.get_rect(center=(WIDTH//2, 350))
-        self.pve_rect = self.pve_button.get_rect(center=(WIDTH//2, 450))
-        self.screen.blit(self.pvp_button, self.pvp_rect)
-        self.screen.blit(self.pve_button, self.pve_rect)
+       
         
     def handle_menu_animations(self):
         self.mouse_position = pygame.mouse.get_pos()
-        if self.pvp_rect.collidepoint(self.mouse_position):
-            self.pvp_button = pygame.font.Font(None, 50).render('1 vs 1 (Local)', True, self.menu_font_animated_color)
-            self.screen.blit(self.pvp_button, self.pvp_rect)
-        if self.pve_rect.collidepoint(self.mouse_position):
-            self.pve_button = pygame.font.Font(None, 50).render('1 vs Random', True, self.menu_font_animated_color)
-            self.screen.blit(self.pve_button, self.pve_rect)
-    
+        self.pvp_rect = self.menu_text('1 vs 1 (Local)', (WIDTH//2, 350), 50)
+        self.pve_rect = self.menu_text('1 vs Random', (WIDTH//2, 450), 50)
+      
+    def menu_text(self, text, center, size):
+        text_rect = pygame.font.Font(None, size).render(text, True, self.menu_font_color).get_rect(center=center)
+        if text_rect.collidepoint(self.mouse_position):
+            self.handle_text(text, self.menu_font_animated_color, center, size)
+        else:
+            self.handle_text(text, self.menu_font_color, center, size)
+        return text_rect
+
+    def handle_text(self, text, color, center, size):
+        text_surface = pygame.font.Font(None, size).render(text, True, color)
+        text_rect = text_surface.get_rect(center=center)
+        self.screen.blit(text_surface, text_rect)
+        
+
     def handle_menu_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
@@ -467,10 +495,10 @@ class Game:
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.pvp_rect.collidepoint(event.pos): 
-                    self.ai_mode, self.gamestate = False, GameState.PLAYING
+                    self.random_mode, self.gamestate = False, GameState.PLAYING
                     self.reset()
                 elif self.pve_rect.collidepoint(event.pos): 
-                    self.ai_mode, self.gamestate = True, GameState.PLAYING
+                    self.random_mode, self.gamestate = True, GameState.PLAYING
                     self.reset()
 
     def show_promotion_menu(self):
