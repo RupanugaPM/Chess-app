@@ -11,7 +11,7 @@ import chess
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
 ROWS, COLS = 8, 8
-SQSIZE = WIDTH // COLS
+SQSIZE = 50
 FONT_NAME = 'Quivira.ttf' # Make sure this font file is in the same directory
 
 # --- Unicode Pieces Dictionary ---
@@ -99,7 +99,7 @@ class Move:
 
 # --- Board Class ---
 class Board:
-    def __init__(self, enable_stockfish = False):
+    def __init__(self, enable_stockfish = True):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
         self.move_list = []
@@ -118,7 +118,6 @@ class Board:
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
     def _add_pieces(self, color):
-        
         pawn_row, back_row = (6, 7) if color == 'white' else (1, 0)
         for col in range(COLS):
             self.squares[pawn_row][col] = Pawn(color)
@@ -130,6 +129,12 @@ class Board:
         self.squares[back_row][5] = Bishop(color)
         self.squares[back_row][6] = Knight(color)
         self.squares[back_row][7] = Rook(color)
+
+    def get_evaluation(self):
+        if self.board_stockfish == None:
+            return 0
+        self.board_stockfish.set_fen_position(self._board.fen())
+        return self.board_stockfish.get_evaluation()
 
     def move(self, piece, move, making_move = True):
         if making_move and self.check_promotion(piece, move.final) == False:
@@ -491,7 +496,6 @@ class Game:
         text_rect = text_surface.get_rect(center=center)
         self.screen.blit(text_surface, text_rect)
         
-
     def handle_menu_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
