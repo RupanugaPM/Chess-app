@@ -11,7 +11,7 @@ import chess
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
 ROWS, COLS = 8, 8
-SQSIZE = 50
+SQSIZE = WIDTH // ROWS
 FONT_NAME = 'Quivira.ttf' # Make sure this font file is in the same directory
 
 # --- Unicode Pieces Dictionary ---
