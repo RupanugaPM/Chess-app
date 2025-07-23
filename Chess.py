@@ -130,11 +130,34 @@ class Board:
         self.squares[back_row][6] = Knight(color)
         self.squares[back_row][7] = Rook(color)
 
+    def set_stockfish(self):
+        self.board_stockfish.set_fen_position(self._board.fen())
+
     def get_evaluation(self):
         if self.board_stockfish == None:
-            return 0
-        self.board_stockfish.set_fen_position(self._board.fen())
+            return None
+        self.set_stockfish()
         return self.board_stockfish.get_evaluation()
+
+    def get_best_move(self):
+        if self.board_stockfish == None:
+            return None
+        self.set_stockfish()
+        return self.board_stockfish.get_best_move()
+
+    def print_evaluation(self):
+        temp_evaluation = self.get_evaluation()
+        if temp_evaluation != None:
+            print(temp_evaluation)
+    
+    def print_best_move(self):
+        temp_best_move = self.get_best_move()
+        if temp_best_move != None:
+            print(temp_best_move)
+
+    def print_aggregate_stockfish_result(self):
+        self.print_best_move()
+        self.print_evaluation()
 
     def move(self, piece, move, making_move = True):
         if making_move and self.check_promotion(piece, move.final) == False:
@@ -158,6 +181,7 @@ class Board:
         piece.moved = True
         self.last_move = move
         self.move_list.append(move)
+        self.print_aggregate_stockfish_result()
 
     def check_promotion(self, piece, final_pos):
         return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
@@ -173,6 +197,7 @@ class Board:
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
         self._board.push_san(self.last_move.san()+piece_name[0])
+        self.print_aggregate_stockfish_result()
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
