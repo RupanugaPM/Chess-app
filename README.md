@@ -46,8 +46,8 @@ Follow these steps to get the game running on your local machine.
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/RupanugaPM/Chess-app.git
+cd Chess-app
 ```
 
 ### Step 2: Install Required Libraries
@@ -68,13 +68,9 @@ pip install -r requirements.txt
 
 ### Step 3: Get the Chess Font
 
-This project uses a font file (`.ttf`) that contains the chess piece characters.
+This project uses a font file (`.ttf`) that contains the chess piece characters. This is included in the repository.
 
-1.  Download a font with chess symbols. The one used during development was [Quivira](http://www.quivis.de/quivira.html).
-2.  Place the `Quivira.ttf` file (or your chosen font file) in the **root directory** of the project, next to `main.py`.
-3.  If you use a different font, make sure to update the `FONT_NAME` constant in the Python script.
-
-### Step 4: Setup Stockfish (Optional)
+### Step 4: Setup Stockfish 
 
 To play against the Stockfish AI, you need to install the engine and make it accessible to the program.
 
