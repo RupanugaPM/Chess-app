@@ -89,10 +89,21 @@ class Move:
         self.valid = self.check_valid
 
     def check_valid(self):
-        return 0<=self.initial.x<8 and 0<=self.initial.y<8 and 0<=self.final.x<8 and 0<=self.final.y<8
+        return 0 <= self.initial.x < 8 and 0 <= self.initial.y < 8 and 0 <= self.final.x < 8 and 0 <= self.final.y < 8
 
     def san(self):
         return chr(97+int(self.initial.x))+str(8 - int(self.initial.y))+chr(97+int(self.final.x))+str(8 - int(self.final.y))
+
+    def san_to_move(san_str):
+        if len(san_str) < 4:
+            raise ValueError("SAN string must be at least 4 characters long (e.g., 'e2e4').")
+        initial_file = ord(san_str[0]) - ord('a')
+        initial_rank = 8 - int(san_str[1])
+        final_file = ord(san_str[2]) - ord('a')
+        final_rank = 8 - int(san_str[3])
+        initial = pygame.math.Vector2(initial_file, initial_rank)
+        final = pygame.math.Vector2(final_file, final_rank)
+        return [initial, final]
 
     def __eq__(self, other):
         return self.initial == other.initial and self.final == other.final
@@ -181,7 +192,6 @@ class Board:
         piece.moved = True
         self.last_move = move
         self.move_list.append(move)
-        self.print_aggregate_stockfish_result()
 
     def check_promotion(self, piece, final_pos):
         return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
@@ -197,7 +207,6 @@ class Board:
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
         self._board.push_san(self.last_move.san()+piece_name[0])
-        self.print_aggregate_stockfish_result()
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
@@ -285,6 +294,7 @@ class Game:
             elif self.gamestate == GameState.PLAYING:
                 self.show_bg()
                 self.show_last_move()
+                self.show_best_move() # shows best move by stockfish
                 self.show_moves()
                 self.show_pieces()
                 if self.dragger.dragging:
@@ -335,6 +345,13 @@ class Game:
                 s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
                 s.fill(color)
                 self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
+
+    def show_best_move(self):
+        for pos in Move.san_to_move(self.board.get_best_move()):
+            color = (0, 200, 0, 100)
+            s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
+            s.fill(color)
+            self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
     
     # --- Event Handling ---
     def handle_playing_events(self):
