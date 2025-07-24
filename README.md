@@ -52,10 +52,8 @@ cd Chess-app
 
 ### Step 2: Install Required Libraries
 
-It's recommended to use a virtual environment.
-
 ```bash
-# Create and activate a virtual environment (optional but recommended)
+# Create and activate a virtual environment (optional)
 python -m venv venv
 # Windows
 .\venv\Scripts\activate
