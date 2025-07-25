@@ -97,6 +97,8 @@ class Move:
     def san_to_move(san_str):
         if len(san_str) < 4:
             raise ValueError("SAN string must be at least 4 characters long (e.g., 'e2e4').")
+        if san_str == None:
+            return None
         initial_file = ord(san_str[0]) - ord('a')
         initial_rank = 8 - int(san_str[1])
         final_file = ord(san_str[2]) - ord('a')
@@ -114,6 +116,9 @@ class Board:
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
         self.move_list = []
+        self.best_move_list_san = []
+        self.best_move_list = []
+        self.evaluation_list = []
         self._create_board()
         self._add_pieces('white')
         self._add_pieces('black')
@@ -147,14 +152,30 @@ class Board:
     def get_evaluation(self):
         if self.board_stockfish == None:
             return None
+        if len(self.evaluation_list) == len(self.move_list) + 1:
+            return self.evaluation_list[-1]
         self.set_stockfish()
-        return self.board_stockfish.get_evaluation()
+        self.evaluation_list.append(self.board_stockfish.get_evaluation())
+        return self.evaluation_list[-1]
 
     def get_best_move(self):
         if self.board_stockfish == None:
             return None
+        if len(self.best_move_list) == len(self.move_list) + 1:
+            return self.best_move_list[-1]
+        self.best_move_list.append(Move.san_to_move(self.get_best_move_san()))
+        return self.best_move_list[-1]
+
+    def get_best_move_san(self):
+        if self.board_stockfish == None:
+            return None
+        if len(self.best_move_list_san) == len(self.move_list) + 1:
+            return self.best_move_list_san[-1]
         self.set_stockfish()
-        return self.board_stockfish.get_best_move()
+        self.best_move_list_san.append(self.board_stockfish.get_best_move())
+        print(*self.move_list)
+        print(*self.best_move_list_san)
+        return self.best_move_list_san[-1]
 
     def print_evaluation(self):
         temp_evaluation = self.get_evaluation()
@@ -192,6 +213,7 @@ class Board:
         piece.moved = True
         self.last_move = move
         self.move_list.append(move)
+        self.get_best_move()
 
     def check_promotion(self, piece, final_pos):
         return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
@@ -207,6 +229,7 @@ class Board:
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
         self._board.push_san(self.last_move.san()+piece_name[0])
+        self.get_best_move()
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
@@ -347,11 +370,12 @@ class Game:
                 self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
 
     def show_best_move(self):
-        for pos in Move.san_to_move(self.board.get_best_move()):
-            color = (0, 200, 0, 100)
-            s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
-            s.fill(color)
-            self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
+        if self.board.board_stockfish != None:
+            for pos in self.board.get_best_move():
+                color = (0, 200, 0, 100)
+                s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
+                s.fill(color)
+                self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
     
     # --- Event Handling ---
     def handle_playing_events(self):
