@@ -86,13 +86,17 @@ class Move:
     def __init__(self, initial, final):
         self.initial = initial # pygame.math.Vector2
         self.final = final   # pygame.math.Vector2
-        self.valid = self.check_valid
+        self.valid = self.check_valid()
+        self.promotion_piece = None
 
     def check_valid(self):
         return 0 <= self.initial.x < 8 and 0 <= self.initial.y < 8 and 0 <= self.final.x < 8 and 0 <= self.final.y < 8
 
     def san(self):
-        return chr(97+int(self.initial.x))+str(8 - int(self.initial.y))+chr(97+int(self.final.x))+str(8 - int(self.final.y))
+        temp = chr(97+int(self.initial.x))+str(8 - int(self.initial.y))+chr(97+int(self.final.x))+str(8 - int(self.final.y))
+        if self.promotion_piece != None:
+            temp += self.promotion_piece
+        return temp
 
     def san_to_move(san_str):
         if len(san_str) < 4:
@@ -123,6 +127,8 @@ class Board:
         self._add_pieces('white')
         self._add_pieces('black')
         self._board = chess.Board()
+        self.promoting = False
+        self.promotion_move = None
         self.board_stockfish = None
         if enable_stockfish:
             self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
@@ -163,7 +169,7 @@ class Board:
             return None
         if len(self.best_move_list) == len(self.move_list) + 1:
             return self.best_move_list[-1]
-        self.best_move_list.append(Move.san_to_move(self.get_best_move_san()))
+        self.best_move_list.append(Move.san_to_move(self.get_best_move_san())[0:2])
         return self.best_move_list[-1]
 
     def get_best_move_san(self):
@@ -191,9 +197,17 @@ class Board:
         self.print_best_move()
         self.print_evaluation()
 
-    def move(self, piece, move, making_move = True):
-        if making_move and self.check_promotion(piece, move.final) == False:
+    def push_move(self, move, making_move = True):
+        self.last_move = move
+        self.move_list.append(move)
+        if making_move:
             self._board.push_san(move.san())
+        self.get_best_move()
+
+    def move(self, piece, move, making_move = True):
+        if self.promoting:
+            return
+        self.promoting = self.check_promotion(piece, move.final)
 
         initial_row, initial_col = int(move.initial.y), int(move.initial.x)
         final_row, final_col = int(move.final.y), int(move.final.x)
@@ -209,11 +223,12 @@ class Board:
             rook.moved = True
 
         self.squares[initial_row][initial_col] = 0
-        self.squares[final_row][final_col] = piece
         piece.moved = True
-        self.last_move = move
-        self.move_list.append(move)
-        self.get_best_move()
+        self.squares[final_row][final_col] = piece
+        if self.promoting:
+            self.promotion_move = move
+            return
+        self.push_move(move, making_move)
 
     def check_promotion(self, piece, final_pos):
         return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
@@ -228,13 +243,17 @@ class Board:
             self.squares[row][col] = Bishop(color)
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
-        self._board.push_san(self.last_move.san()+piece_name[0])
-        self.get_best_move()
+        self.promotion_move.promotion_piece = piece_name[0]
+        self.push_move(self.promotion_move)
+        self.promoting = False
+        self.promotion_move = None
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
 
         new.move_list = copy.deepcopy(self.move_list)
+
+        new.promoting = False
 
         new.squares = [
             [copy.deepcopy(piece) for piece in row]
