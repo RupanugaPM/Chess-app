@@ -8,7 +8,8 @@ Then, replace the link below with the path to your image!
 -->
  
 *(Example screenshot)*
-
+![Main Menu](.menu.png)
+![Chess Play](.chess_play.png)
 ---
 
 ## ✨ Features
