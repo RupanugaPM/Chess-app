@@ -8,8 +8,8 @@ Then, replace the link below with the path to your image!
 -->
  
 *(Example screenshot)*
-![Main Menu](.menu.png)
-![Chess Play](.chess_play.png)
+![Main Menu](menu.png)
+![Chess Play](chess_play.png)
 ---
 
 ## ✨ Features
@@ -29,7 +29,7 @@ Then, replace the link below with the path to your image!
 *   **Graphics:**
     *   Elegant, font-based rendering for chess pieces (no image assets required!).
     *   Classic and easy-to-read board colors.
-*   **Optional Stockfish Integration:**
+*   **Stockfish Integration:**
     *   Plug in the world's most powerful chess engine to play against a truly formidable AI.
 
 ---
@@ -42,7 +42,7 @@ Follow these steps to get the game running on your local machine.
 
 *   Python 3.8+
 *   Pygame
-*   Stockfish (optional, for advanced AI)
+*   Stockfish 
 
 ### Step 1: Clone the Repository
 
@@ -125,9 +125,3 @@ This project is a solid foundation, and here are some ideas for future enhanceme
 *   [ ] **Custom Themes:** Allow players to change board and piece colors.
 *   [ ] **Timed Games:** Add chess clocks for blitz and rapid games.
 *   [ ] **More AI Levels:** Implement a native AI with varying difficulty (e.g., using the Minimax algorithm).
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
