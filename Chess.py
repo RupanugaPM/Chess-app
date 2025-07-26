@@ -11,7 +11,7 @@ import chess
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
 ROWS, COLS = 8, 8
-SQSIZE = WIDTH // ROWS
+SQSIZE = 50
 FONT_NAME = 'Quivira.ttf' # Make sure this font file is in the same directory
 
 # --- Unicode Pieces Dictionary ---
@@ -99,10 +99,10 @@ class Move:
         return temp
 
     def san_to_move(san_str):
-        if len(san_str) < 4:
-            raise ValueError("SAN string must be at least 4 characters long (e.g., 'e2e4').")
         if san_str == None:
             return None
+        if len(san_str) < 4:
+            raise ValueError("SAN string must be at least 4 characters long (e.g., 'e2e4').")
         initial_file = ord(san_str[0]) - ord('a')
         initial_rank = 8 - int(san_str[1])
         final_file = ord(san_str[2]) - ord('a')
@@ -169,7 +169,7 @@ class Board:
             return None
         if len(self.best_move_list) == len(self.move_list) + 1:
             return self.best_move_list[-1]
-        self.best_move_list.append(Move.san_to_move(self.get_best_move_san())[0:2])
+        self.best_move_list.append(Move.san_to_move(self.get_best_move_san()))
         return self.best_move_list[-1]
 
     def get_best_move_san(self):
@@ -179,8 +179,6 @@ class Board:
             return self.best_move_list_san[-1]
         self.set_stockfish()
         self.best_move_list_san.append(self.board_stockfish.get_best_move())
-        print(*self.move_list)
-        print(*self.best_move_list_san)
         return self.best_move_list_san[-1]
 
     def print_evaluation(self):
@@ -359,6 +357,7 @@ class Game:
 
     # --- Drawing Methods ---
     def show_bg(self):
+        self.screen.fill((0, 0, 0))
         for row in range(ROWS):
             for col in range(COLS):
                 color = WHITE_SQUARE if (row + col) % 2 == 0 else BROWN
@@ -562,7 +561,6 @@ class Game:
         title = pygame.font.Font(None, 74).render('Python Chess', True, self.menu_title_color)
         self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 150))
        
-        
     def handle_menu_animations(self):
         self.mouse_position = pygame.mouse.get_pos()
         self.pvp_rect = self.menu_text('1 vs 1 (Local)', (WIDTH//2, 350), 50)
@@ -609,7 +607,9 @@ class Game:
 
     def handle_promotion_events(self):
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: pygame.quit(), sys.exit()
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for name, rect in self.promotion_options.items():
                     if rect.collidepoint(event.pos):
