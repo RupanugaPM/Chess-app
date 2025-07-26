@@ -11,7 +11,7 @@ import chess
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
 ROWS, COLS = 8, 8
-SQSIZE = WIDTH // ROWS
+SQSIZE = 50
 FONT_NAME = 'Quivira.ttf' # Make sure this font file is in the same directory
 
 # --- Unicode Pieces Dictionary ---
@@ -357,6 +357,7 @@ class Game:
 
     # --- Drawing Methods ---
     def show_bg(self):
+        self.screen.fill((0, 0, 0))
         for row in range(ROWS):
             for col in range(COLS):
                 color = WHITE_SQUARE if (row + col) % 2 == 0 else BROWN
@@ -560,7 +561,6 @@ class Game:
         title = pygame.font.Font(None, 74).render('Python Chess', True, self.menu_title_color)
         self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 150))
        
-        
     def handle_menu_animations(self):
         self.mouse_position = pygame.mouse.get_pos()
         self.pvp_rect = self.menu_text('1 vs 1 (Local)', (WIDTH//2, 350), 50)
