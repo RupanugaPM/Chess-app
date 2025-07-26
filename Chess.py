@@ -99,10 +99,10 @@ class Move:
         return temp
 
     def san_to_move(san_str):
-        if len(san_str) < 4:
-            raise ValueError("SAN string must be at least 4 characters long (e.g., 'e2e4').")
         if san_str == None:
             return None
+        if len(san_str) < 4:
+            raise ValueError("SAN string must be at least 4 characters long (e.g., 'e2e4').")
         initial_file = ord(san_str[0]) - ord('a')
         initial_rank = 8 - int(san_str[1])
         final_file = ord(san_str[2]) - ord('a')
@@ -169,7 +169,7 @@ class Board:
             return None
         if len(self.best_move_list) == len(self.move_list) + 1:
             return self.best_move_list[-1]
-        self.best_move_list.append(Move.san_to_move(self.get_best_move_san())[0:2])
+        self.best_move_list.append(Move.san_to_move(self.get_best_move_san()))
         return self.best_move_list[-1]
 
     def get_best_move_san(self):
@@ -179,8 +179,6 @@ class Board:
             return self.best_move_list_san[-1]
         self.set_stockfish()
         self.best_move_list_san.append(self.board_stockfish.get_best_move())
-        print(*self.move_list)
-        print(*self.best_move_list_san)
         return self.best_move_list_san[-1]
 
     def print_evaluation(self):
