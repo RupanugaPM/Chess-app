@@ -607,7 +607,9 @@ class Game:
 
     def handle_promotion_events(self):
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: pygame.quit(), sys.exit()
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for name, rect in self.promotion_options.items():
                     if rect.collidepoint(event.pos):
