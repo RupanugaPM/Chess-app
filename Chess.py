@@ -37,6 +37,7 @@ class GameState:
     PLAYING = 1
     PROMOTING = 2
     GAME_OVER = 3
+    SETTINGS = 4
 
 # --- Piece Class (Base) ---
 class Piece:
@@ -263,6 +264,8 @@ class Board:
             for row in self.squares
         ]
 
+        new.king_position = copy.deepcopy(self.king_position)
+
         new.last_move = copy.deepcopy(self.last_move)
 
         new._board = self._board.copy()
@@ -357,6 +360,8 @@ class Game:
                 self.show_pieces()
                 self.show_game_over()
                 self.handle_game_over_events()
+            elif self.gamestate == GameState.SETTINGS:
+                pass
             pygame.display.update()
             self.clock.tick(60)
 
