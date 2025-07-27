@@ -11,7 +11,7 @@ import chess
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
 ROWS, COLS = 8, 8
-SQSIZE = 50
+SQSIZE = WIDTH // ROWS
 FONT_NAME = 'Quivira.ttf' # Make sure this font file is in the same directory
 
 # --- Unicode Pieces Dictionary ---
@@ -37,6 +37,7 @@ class GameState:
     PLAYING = 1
     PROMOTING = 2
     GAME_OVER = 3
+    SETTINGS = 4
 
 # --- Piece Class (Base) ---
 class Piece:
@@ -127,6 +128,7 @@ class Board:
         self._add_pieces('white')
         self._add_pieces('black')
         self._board = chess.Board()
+        self.king_position = [[7, 4], [0, 4]]
         self.promoting = False
         self.promotion_move = None
         self.board_stockfish = None
@@ -223,13 +225,14 @@ class Board:
         self.squares[initial_row][initial_col] = 0
         piece.moved = True
         self.squares[final_row][final_col] = piece
+
+        if isinstance(piece, King):
+            self.king_position[piece.color == "black"] = [final_row, final_col]
+
         if self.promoting:
             self.promotion_move = move
             return
         self.push_move(move, making_move)
-
-    def check_promotion(self, piece, final_pos):
-        return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
     
     def promote_pawn(self, row, col, piece_name):
         color = self.squares[row][col].color
@@ -246,6 +249,9 @@ class Board:
         self.promoting = False
         self.promotion_move = None
 
+    def check_promotion(self, piece, final_pos):
+        return isinstance(piece, Pawn) and (final_pos.y == 0 or final_pos.y == 7)
+
     def clone(self):
         new = self.__class__.__new__(self.__class__)
 
@@ -257,6 +263,8 @@ class Board:
             [copy.deepcopy(piece) for piece in row]
             for row in self.squares
         ]
+
+        new.king_position = copy.deepcopy(self.king_position)
 
         new.last_move = copy.deepcopy(self.last_move)
 
@@ -352,6 +360,8 @@ class Game:
                 self.show_pieces()
                 self.show_game_over()
                 self.handle_game_over_events()
+            elif self.gamestate == GameState.SETTINGS:
+                pass
             pygame.display.update()
             self.clock.tick(60)
 
