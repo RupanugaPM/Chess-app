@@ -318,6 +318,7 @@ class Game:
         self.dragger = Dragger()
         self.turn = 'white'
         self.promotion_pos = None
+        self.promotion_pieces = ['queen', 'rook', 'bishop', 'knight']
         self.game_over_message = ""
         self.random_mode = False
         self.menu_font_color = FONT_COLOR
@@ -564,6 +565,8 @@ class Game:
             all_moves = [(p, m) for r in self.board.squares for p in r if p != 0 and p.color == 'black' for m in p.moves]
             if all_moves:
                 self.make_move(*random.choice(all_moves))
+            if self.gamestate == GameState.PROMOTING:
+                self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], random.choice(self.promotion_pieces))
     
     # --- UI and State Handlers ---
     def show_menu(self):
@@ -608,7 +611,7 @@ class Game:
         rect = pygame.Rect(col * SQSIZE, y_start, SQSIZE, SQSIZE * 4)
         pygame.draw.rect(self.screen, MENU_BG_COLOR, rect, border_radius=10)
         self.promotion_options = {}
-        for i, name in enumerate(['queen', 'rook', 'bishop', 'knight']):
+        for i, name in enumerate(self.promotion_pieces):
             promo_rect = pygame.Rect(rect.x, rect.y + i * SQSIZE, SQSIZE, SQSIZE)
             self.promotion_options[name] = promo_rect
             char = UNICODE_PIECES[f'{self.turn[0]}_{name}']
