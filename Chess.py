@@ -236,6 +236,7 @@ class Board:
     
     def promote_pawn(self, row, col, piece_name):
         color = self.squares[row][col].color
+        self.promotion_move.promotion_piece = piece_name[0]
         if piece_name == 'queen': 
             self.squares[row][col] = Queen(color)
         elif piece_name == 'rook': 
@@ -244,7 +245,7 @@ class Board:
             self.squares[row][col] = Bishop(color)
         elif piece_name == 'knight': 
             self.squares[row][col] = Knight(color)
-        self.promotion_move.promotion_piece = piece_name[0]
+            self.promotion_move.promotion_piece = piece_name[1]
         self.push_move(self.promotion_move)
         self.promoting = False
         self.promotion_move = None
@@ -318,7 +319,7 @@ class Game:
         self.dragger = Dragger()
         self.turn = 'white'
         self.promotion_pos = None
-        self.promotion_pieces = ['queen', 'rook', 'bishop', 'knight']
+        self.promotion_pieces = ['queen', 'rook', 'bishop', 'knight'] 
         self.game_over_message = ""
         self.random_mode = False
         self.menu_font_color = FONT_COLOR
@@ -567,6 +568,8 @@ class Game:
                 self.make_move(*random.choice(all_moves))
             if self.gamestate == GameState.PROMOTING:
                 self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], random.choice(self.promotion_pieces))
+                self.gamestate = GameState.PLAYING
+                self.next_turn()
     
     # --- UI and State Handlers ---
     def show_menu(self):
