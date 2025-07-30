@@ -31,13 +31,47 @@ MENU_BG_COLOR = (49, 46, 43)
 FONT_COLOR = (230, 230, 230)
 GAME_OVER_BG_COLOR = (0, 0, 0, 150)
 
+def rotate_matrix_index(i, j, rows, cols, times):
+    """
+    Rotate the point (i, j) in a rows×cols matrix by 90° CW 'times' times.
+    Uses an inner helper to do one 90° turn.
+    Returns (final_i, final_j, final_rows, final_cols).
+    """
+    def rotate90(pi, pj, pr, pc):
+        # one 90° clockwise step
+        return pj, pr - 1 - pi, pc, pr
+
+    r = times % 4
+    ci, cj, cr, cc = i, j, rows, cols
+    for _ in range(r):
+        ci, cj, cr, cc = rotate90(ci, cj, cr, cc)
+    return ci, cj
+
+def rotate_matrix_index_full(i, j, rows, cols, times):
+    """
+    Rotate the point (i, j) in a rows×cols matrix by 90° CW 'times' times.
+    Uses an inner helper to do one 90° turn.
+    Returns (final_i, final_j, final_rows, final_cols).
+    """
+    def rotate90(pi, pj, pr, pc):
+        # one 90° clockwise step
+        return pj, pr - 1 - pi, pc, pr
+
+    r = times % 4
+    ci, cj, cr, cc = i, j, rows, cols
+    for _ in range(r):
+        ci, cj, cr, cc = rotate90(ci, cj, cr, cc)
+    return ci, cj, cr, cc
+
 # --- Game States ---
 class GameState:
-    MENU = 0
-    PLAYING = 1
-    PROMOTING = 2
-    GAME_OVER = 3
-    SETTINGS = 4
+    WHITE_PERSPECTIVE = 0
+    BLACK_PERSPECTIVE = 1
+    SETTINGS = 2
+    MENU = 3
+    PLAYING = 4
+    PROMOTING = 5
+    GAME_OVER = 6
 
 # --- Piece Class (Base) ---
 class Piece:
@@ -312,7 +346,9 @@ class Game:
         except FileNotFoundError:
             print(f"Error: Font '{FONT_NAME}' not found. Using default font.")
             self.piece_font = pygame.font.Font(None, int(SQSIZE * 0.8))
-
+        
+        # 0 for white perspective 1 for black perspective
+        self.board_perspective = GameState.WHITE_PERSPECTIVE # TODO MAKE BOARD PERSPECTIVE FROM BLACK
         self.gamestate = GameState.MENU
         self.board = None
         self.mouse_position = (0, 0)
@@ -372,7 +408,10 @@ class Game:
         self.screen.fill((0, 0, 0))
         for row in range(ROWS):
             for col in range(COLS):
-                color = WHITE_SQUARE if (row + col) % 2 == 0 else BROWN
+                state = 0
+                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                    state = 1
+                color = WHITE_SQUARE if (row + col) % 2 == state else BROWN
                 pygame.draw.rect(self.screen, color, (col * SQSIZE, row * SQSIZE, SQSIZE, SQSIZE))
 
     def show_pieces(self):
@@ -381,7 +420,11 @@ class Game:
                 piece = self.board.squares[row][col]
                 if piece != 0 and piece != self.dragger.piece:
                     text_surface = self.piece_font.render(piece.char, True, piece.font_color)
-                    text_rect = text_surface.get_rect(center=(col * SQSIZE + SQSIZE // 2, row * SQSIZE + SQSIZE // 2))
+                    cur_row = row
+                    cur_col = col
+                    if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                        cur_row, cur_col = rotate_matrix_index(row, col, ROWS, COLS, 2)
+                    text_rect = text_surface.get_rect(center=(cur_col * SQSIZE + SQSIZE // 2, cur_row * SQSIZE + SQSIZE // 2))
                     self.screen.blit(text_surface, text_rect)
 
     def show_moves(self):
@@ -389,7 +432,11 @@ class Game:
             for move in self.dragger.piece.moves:
                 s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
                 s.fill(LEGAL_MOVE_COLOR)
-                self.screen.blit(s, (move.final.x * SQSIZE, move.final.y * SQSIZE))
+                cur_col = move.final.x
+                cur_row = move.final.y
+                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                    cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
+                self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
 
     def show_last_move(self):
         if self.board.last_move:
@@ -397,7 +444,11 @@ class Game:
                 color = (200, 200, 0, 100)
                 s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
                 s.fill(color)
-                self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
+                cur_col = pos.x
+                cur_row = pos.y
+                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                    cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
+                self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
 
     def show_best_move(self):
         if self.board.board_stockfish != None:
@@ -405,7 +456,11 @@ class Game:
                 color = (0, 200, 0, 100)
                 s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
                 s.fill(color)
-                self.screen.blit(s, (pos.x * SQSIZE, pos.y * SQSIZE))
+                cur_col = pos.x
+                cur_row = pos.y
+                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                    cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
+                self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
     
     # --- Event Handling ---
     def handle_playing_events(self):
@@ -415,19 +470,24 @@ class Game:
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 self.dragger.update_mouse(event.pos)
-                clicked_row, clicked_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
+                cur_row, cur_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
+                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                    cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
                 piece = 0 
-                if 0<=clicked_row<ROWS and 0<=clicked_col<COLS:
-                    piece = self.board.squares[clicked_row][clicked_col]
+                if 0<=cur_row<ROWS and 0<=cur_col<COLS:
+                    piece = self.board.squares[cur_row][cur_col]
                 if piece != 0 and piece.color == self.turn:
-                    self.dragger.save_initial(event.pos)
+                    self.dragger.initial_col = cur_col
+                    self.dragger.initial_row = cur_row
                     self.dragger.drag_piece(piece)
             if event.type == pygame.MOUSEMOTION and self.dragger.dragging:
                 self.dragger.update_mouse(event.pos)
             if event.type == pygame.MOUSEBUTTONUP and self.dragger.dragging:
-                released_row, released_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
+                cur_row, cur_col = self.dragger.mouseY // SQSIZE, self.dragger.mouseX // SQSIZE
+                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                    cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
                 initial = pygame.math.Vector2(self.dragger.initial_col, self.dragger.initial_row)
-                final = pygame.math.Vector2(released_col, released_row)
+                final = pygame.math.Vector2(cur_col, cur_row)
                 move = Move(initial, final)
                 if move in self.dragger.piece.moves: 
                     self.make_move(self.dragger.piece, move)
