@@ -6,6 +6,7 @@ import random
 import pygame
 import stockfish 
 import chess
+import json
 
 
 # --- Constants ---
@@ -348,7 +349,7 @@ class Game:
             self.piece_font = pygame.font.Font(None, int(SQSIZE * 0.8))
         
         # 0 for white perspective 1 for black perspective
-        self.board_perspective = GameState.WHITE_PERSPECTIVE # TODO MAKE BOARD PERSPECTIVE FROM BLACK
+        self.board_perspective = GameState.BLACK_PERSPECTIVE # TODO MAKE BOARD PERSPECTIVE FROM BLACK
         self.gamestate = GameState.MENU
         self.board = None
         self.mouse_position = (0, 0)
@@ -370,6 +371,11 @@ class Game:
         self.promotion_pos = None
         self.game_over_message = ""
         self.calc_all_valid_moves(self.turn)
+
+    def get_board_perspective(self):
+        if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+            return 'black'
+        return 'white'
 
     def mainloop(self):
         while True:
@@ -423,7 +429,7 @@ class Game:
                     cur_row = row
                     cur_col = col
                     if self.board_perspective == GameState.BLACK_PERSPECTIVE:
-                        cur_row, cur_col = rotate_matrix_index(row, col, ROWS, COLS, 2)
+                        cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
                     text_rect = text_surface.get_rect(center=(cur_col * SQSIZE + SQSIZE // 2, cur_row * SQSIZE + SQSIZE // 2))
                     self.screen.blit(text_surface, text_rect)
 
@@ -669,17 +675,20 @@ class Game:
                     self.reset()
 
     def show_promotion_menu(self):
-        row, col = self.promotion_pos
-        y_start = row * SQSIZE if self.turn == 'white' else (row - 3) * SQSIZE
-        rect = pygame.Rect(col * SQSIZE, y_start, SQSIZE, SQSIZE * 4)
-        pygame.draw.rect(self.screen, MENU_BG_COLOR, rect, border_radius=10)
+        cur_row, cur_col = self.promotion_pos
+        if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+            cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
+        cur_row = cur_row * SQSIZE if self.turn == self.get_board_perspective() else (cur_row - 3) * SQSIZE
+
+        rect = pygame.Rect(cur_col * SQSIZE, cur_row, SQSIZE, SQSIZE * 4)
+        pygame.draw.rect(self.screen, MENU_BG_COLOR, rect, border_radius = 10)
         self.promotion_options = {}
         for i, name in enumerate(self.promotion_pieces):
             promo_rect = pygame.Rect(rect.x, rect.y + i * SQSIZE, SQSIZE, SQSIZE)
             self.promotion_options[name] = promo_rect
             char = UNICODE_PIECES[f'{self.turn[0]}_{name}']
             text_surf = self.piece_font.render(char, True, PIECE_COLORS[self.turn])
-            self.screen.blit(text_surf, text_surf.get_rect(center=promo_rect.center))
+            self.screen.blit(text_surf, text_surf.get_rect(center = promo_rect.center))
 
     def handle_promotion_events(self):
         for event in pygame.event.get():
