@@ -8,12 +8,12 @@ import stockfish
 import chess
 import json
 
-
 # --- Constants ---
 WIDTH, HEIGHT = 800, 800
 ROWS, COLS = 8, 8
 SQSIZE = WIDTH // ROWS
-FONT_NAME = 'Quivira.ttf' # Make sure this font file is in the same directory
+FONT_NAME = 'Quivira.ttf'
+SETTINGS_FILE = "chess_settings.json"
 
 # --- Unicode Pieces Dictionary ---
 UNICODE_PIECES = {
@@ -32,14 +32,22 @@ MENU_BG_COLOR = (49, 46, 43)
 FONT_COLOR = (230, 230, 230)
 GAME_OVER_BG_COLOR = (0, 0, 0, 150)
 
+# Settings UI Colors
+COLOR_WHITE = (255, 255, 255)
+COLOR_BLACK = (0, 0, 0)
+COLOR_LIGHT_GRAY = (200, 200, 200)
+COLOR_GRAY = (150, 150, 150)
+COLOR_DARK_GRAY = (100, 100, 100)
+COLOR_BLUE = (100, 100, 255)
+COLOR_GLASS_BASE = (100, 100, 200, 100)
+COLOR_GLASS_BASE_HOVER = (120, 120, 220, 160)
+COLOR_GLASS_HIGHLIGHT = (255, 255, 255, 50)
+
 def rotate_matrix_index(i, j, rows, cols, times):
     """
     Rotate the point (i, j) in a rows×cols matrix by 90° CW 'times' times.
-    Uses an inner helper to do one 90° turn.
-    Returns (final_i, final_j, final_rows, final_cols).
     """
     def rotate90(pi, pj, pr, pc):
-        # one 90° clockwise step
         return pj, pr - 1 - pi, pc, pr
 
     r = times % 4
@@ -51,11 +59,9 @@ def rotate_matrix_index(i, j, rows, cols, times):
 def rotate_matrix_index_full(i, j, rows, cols, times):
     """
     Rotate the point (i, j) in a rows×cols matrix by 90° CW 'times' times.
-    Uses an inner helper to do one 90° turn.
     Returns (final_i, final_j, final_rows, final_cols).
     """
     def rotate90(pi, pj, pr, pc):
-        # one 90° clockwise step
         return pj, pr - 1 - pi, pc, pr
 
     r = times % 4
@@ -74,7 +80,116 @@ class GameState:
     PROMOTING = 5
     GAME_OVER = 6
 
-# --- Piece Class (Base) ---
+# --- UI Components ---
+class Slider:
+    """A slider UI element that can be dragged to select a value in a range."""
+    def __init__(self, x, y, w, h, min_val, max_val, initial_val, label="", font=None):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.min_val = min_val
+        self.max_val = max_val
+        self.val = initial_val
+        self.label = label
+        self.dragging = False
+        self.knob_radius = h // 2 + 4
+        self.font = font if font else pygame.font.Font(None, 24)
+        self.update_knob_pos()
+
+    def update_knob_pos(self):
+        ratio = (self.val - self.min_val) / (self.max_val - self.min_val)
+        knob_x = self.rect.x + ratio * self.rect.w
+        self.knob_rect = pygame.Rect(0, 0, self.knob_radius * 2, self.knob_radius * 2)
+        self.knob_rect.center = (knob_x, self.rect.centery)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos) or self.knob_rect.collidepoint(event.pos):
+                self.dragging = True
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        if self.dragging and event.type == pygame.MOUSEMOTION:
+            mouse_x = max(self.rect.x, min(event.pos[0], self.rect.right))
+            ratio = (mouse_x - self.rect.x) / self.rect.w
+            self.val = self.min_val + ratio * (self.max_val - self.min_val)
+            if isinstance(self.min_val, int) and isinstance(self.max_val, int):
+                self.val = round(self.val)
+            self.update_knob_pos()
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, COLOR_GRAY, self.rect, border_radius=5)
+        fill_width = self.knob_rect.centerx - self.rect.x
+        fill_rect = pygame.Rect(self.rect.x, self.rect.y, fill_width, self.rect.h)
+        pygame.draw.rect(screen, COLOR_BLUE, fill_rect, border_radius=5)
+        pygame.draw.circle(screen, COLOR_DARK_GRAY, self.knob_rect.center, self.knob_radius)
+        pygame.draw.circle(screen, COLOR_WHITE, self.knob_rect.center, self.knob_radius - 2)
+        label_surface = self.font.render(self.label, True, COLOR_WHITE)
+        screen.blit(label_surface, (self.rect.x, self.rect.y - 30))
+        value_text = str(self.val)
+        value_surface = self.font.render(value_text, True, COLOR_WHITE)
+        screen.blit(value_surface, (self.rect.right + 20, self.rect.centery - 12))
+        
+    def get_value(self):
+        return self.val
+
+class ToggleButton:
+    """A toggle button for on/off settings."""
+    def __init__(self, x, y, w, h, label, initial_state=False, font=None):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.label = label
+        self.state = initial_state
+        self.font = font if font else pygame.font.Font(None, 24)
+        self.is_hovered = False
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
+            self.state = not self.state
+
+    def draw(self, screen):
+        # Draw label
+        label_surface = self.font.render(self.label, True, COLOR_WHITE)
+        screen.blit(label_surface, (self.rect.x - 200, self.rect.centery - 12))
+        
+        # Draw toggle background
+        bg_color = COLOR_BLUE if self.state else COLOR_GRAY
+        pygame.draw.rect(screen, bg_color, self.rect, border_radius=self.rect.h // 2)
+        
+        # Draw toggle circle
+        circle_x = self.rect.right - self.rect.h // 2 if self.state else self.rect.x + self.rect.h // 2
+        pygame.draw.circle(screen, COLOR_WHITE, (circle_x, self.rect.centery), self.rect.h // 2 - 4)
+        
+        # Draw on/off text
+        state_text = "ON" if self.state else "OFF"
+        state_surface = self.font.render(state_text, True, COLOR_WHITE)
+        screen.blit(state_surface, (self.rect.right + 20, self.rect.centery - 12))
+
+    def get_value(self):
+        return self.state
+
+class Button:
+    """A simple clickable button."""
+    def __init__(self, x, y, w, h, text, callback, font=None):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.text = text
+        self.callback = callback
+        self.is_hovered = False
+        self.font = font if font else pygame.font.Font(None, 24)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
+            self.callback()
+
+    def draw(self, screen):
+        color = LIGHT_RED if self.is_hovered else COLOR_GRAY
+        pygame.draw.rect(screen, color, self.rect, border_radius=10)
+        pygame.draw.rect(screen, COLOR_WHITE, self.rect, 2, border_radius=10)
+        text_surface = self.font.render(self.text, True, COLOR_WHITE)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        screen.blit(text_surface, text_rect)
+
+# --- Piece Classes (unchanged from original) ---
 class Piece:
     def __init__(self, name, color, value):
         self.name = name
@@ -91,7 +206,6 @@ class Piece:
     def clear_moves(self):
         self.moves = []
 
-# --- Subclasses for each Piece ---
 class Pawn(Piece):
     def __init__(self, color):
         self.dir = -1 if color == 'white' else 1
@@ -117,11 +231,11 @@ class King(Piece):
     def __init__(self, color):
         super().__init__('king', color, 10000.0)
 
-# --- Move Class ---
+# --- Move Class (unchanged) ---
 class Move:
     def __init__(self, initial, final):
-        self.initial = initial # pygame.math.Vector2
-        self.final = final   # pygame.math.Vector2
+        self.initial = initial
+        self.final = final
         self.valid = self.check_valid()
         self.promotion_piece = None
 
@@ -150,9 +264,9 @@ class Move:
     def __eq__(self, other):
         return self.initial == other.initial and self.final == other.final
 
-# --- Board Class ---
+# --- Board Class with Stockfish improvements ---
 class Board:
-    def __init__(self, enable_stockfish = True):
+    def __init__(self, enable_stockfish=True, stockfish_level=10):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
         self.move_list = []
@@ -167,11 +281,23 @@ class Board:
         self.promoting = False
         self.promotion_move = None
         self.board_stockfish = None
+        self.stockfish_level = stockfish_level
         if enable_stockfish:
-            self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
+            self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
+            self.board_stockfish.set_skill_level(stockfish_level)
 
-    def _enable_stockfish(self):
-        self.board_stockfish = stockfish.Stockfish(path = "stockfish-windows-x86-64-avx2.exe")
+    def _enable_stockfish(self, level=10):
+        self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
+        self.stockfish_level = level
+        self.board_stockfish.set_skill_level(level)
+
+    def _disable_stockfish(self):
+        self.board_stockfish = None
+
+    def set_stockfish_level(self, level):
+        self.stockfish_level = level
+        if self.board_stockfish:
+            self.board_stockfish.set_skill_level(level)
 
     def _create_board(self):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
@@ -190,7 +316,8 @@ class Board:
         self.squares[back_row][7] = Rook(color)
 
     def set_stockfish(self):
-        self.board_stockfish.set_fen_position(self._board.fen())
+        if self.board_stockfish:
+            self.board_stockfish.set_fen_position(self._board.fen())
 
     def get_evaluation(self):
         if self.board_stockfish == None:
@@ -232,14 +359,14 @@ class Board:
         self.print_best_move()
         self.print_evaluation()
 
-    def push_move(self, move, making_move = True):
+    def push_move(self, move, making_move=True):
         self.last_move = move
         self.move_list.append(move)
         if making_move:
             self._board.push_san(move.san())
         self.get_best_move()
 
-    def move(self, piece, move, making_move = True):
+    def move(self, piece, move, making_move=True):
         if self.promoting:
             return
         self.promoting = self.check_promotion(piece, move.final)
@@ -290,24 +417,16 @@ class Board:
 
     def clone(self):
         new = self.__class__.__new__(self.__class__)
-
         new.move_list = copy.deepcopy(self.move_list)
-
         new.promoting = False
-
         new.squares = [
             [copy.deepcopy(piece) for piece in row]
             for row in self.squares
         ]
-
         new.king_position = copy.deepcopy(self.king_position)
-
         new.last_move = copy.deepcopy(self.last_move)
-
         new._board = self._board.copy()
-
         new.board_stockfish = None
-
         return new
 
     def __deepcopy__(self, memo):
@@ -335,21 +454,26 @@ class Dragger:
     def undrag_piece(self): 
         self.piece, self.dragging = None, False
 
-# --- Game Class (Main Controller) ---
+# --- Game Class with Settings Integration ---
 class Game:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption('Chess')
         self.clock = pygame.time.Clock()
+        
+        # Load fonts
         try:
             self.piece_font = pygame.font.Font(FONT_NAME, int(SQSIZE * 0.8))
         except FileNotFoundError:
             print(f"Error: Font '{FONT_NAME}' not found. Using default font.")
             self.piece_font = pygame.font.Font(None, int(SQSIZE * 0.8))
         
-        # 0 for white perspective 1 for black perspective
-        self.board_perspective = GameState.BLACK_PERSPECTIVE # TODO MAKE BOARD PERSPECTIVE FROM BLACK
+        self.menu_font = pygame.font.Font(None, 36)
+        
+        # Load settings
+        self.load_settings()
+        
         self.gamestate = GameState.MENU
         self.board = None
         self.mouse_position = (0, 0)
@@ -358,14 +482,118 @@ class Game:
         self.promotion_pos = None
         self.promotion_pieces = ['queen', 'rook', 'bishop', 'knight'] 
         self.game_over_message = ""
-        self.random_mode = False
+        self.game_mode = None  # 'pvp', 'random', 'stockfish'
         self.menu_font_color = FONT_COLOR
         self.menu_title_color = WHITE_SQUARE
         self.menu_background_color = MENU_BG_COLOR
-        self.menu_font_animated_color = LIGHT_RED  # Highlight color for menu buttons
+        self.menu_font_animated_color = LIGHT_RED
+        
+        # Settings UI elements
+        self.create_settings_ui()
+
+    def load_settings(self):
+        """Load settings from JSON file."""
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                settings = json.load(f)
+                self.board_perspective = GameState.WHITE_PERSPECTIVE if settings.get("perspective") == "white" else GameState.BLACK_PERSPECTIVE
+                self.show_stockfish_hints = settings.get("show_hints", True)
+                self.stockfish_difficulty = settings.get("stockfish_difficulty", 10)
+                print("Settings loaded successfully.")
+        except (FileNotFoundError, json.JSONDecodeError):
+            print("Settings file not found. Using default settings.")
+            self.board_perspective = GameState.WHITE_PERSPECTIVE
+            self.show_stockfish_hints = True
+            self.stockfish_difficulty = 10
+
+    def save_settings(self):
+        """Save current settings to JSON file."""
+        settings = {
+            "perspective": "white" if self.perspective_toggle.get_value() else "black",
+            "show_hints": self.hints_toggle.get_value(),
+            "stockfish_difficulty": self.difficulty_slider.get_value()
+        }
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=4)
+        print("Settings saved.")
+
+    def create_settings_ui(self):
+        """Create UI elements for settings menu."""
+        # Perspective toggle
+        self.perspective_toggle = ToggleButton(
+            400, 200, 80, 30, 
+            "White Perspective", 
+            self.board_perspective == GameState.WHITE_PERSPECTIVE,
+            self.menu_font
+        )
+        
+        # Stockfish hints toggle
+        self.hints_toggle = ToggleButton(
+            400, 280, 80, 30,
+            "Show Best Moves",
+            self.show_stockfish_hints,
+            self.menu_font
+        )
+        
+        # Stockfish difficulty slider
+        self.difficulty_slider = Slider(
+            150, 380, 500, 20,
+            0, 20, self.stockfish_difficulty,
+            "Stockfish Difficulty",
+            self.menu_font
+        )
+        
+        # Save button
+        self.save_button = Button(
+            250, 480, 120, 50,
+            "Save",
+            self.save_and_return,
+            self.menu_font
+        )
+        
+        # Back button
+        self.back_button = Button(
+            430, 480, 120, 50,
+            "Back",
+            self.return_to_menu,
+            self.menu_font
+        )
+        
+        self.settings_ui_elements = [
+            self.perspective_toggle,
+            self.hints_toggle,
+            self.difficulty_slider,
+            self.save_button,
+            self.back_button
+        ]
+
+    def save_and_return(self):
+        """Save settings and return to menu."""
+        # Update internal settings
+        self.board_perspective = GameState.WHITE_PERSPECTIVE if self.perspective_toggle.get_value() else GameState.BLACK_PERSPECTIVE
+        self.show_stockfish_hints = self.hints_toggle.get_value()
+        self.stockfish_difficulty = self.difficulty_slider.get_value()
+        
+        # Save to file
+        self.save_settings()
+        
+        # Return to menu
+        self.gamestate = GameState.MENU
+
+    def return_to_menu(self):
+        """Return to menu without saving."""
+        self.gamestate = GameState.MENU
 
     def reset(self):
-        self.board = Board()
+        """Reset the game with current settings."""
+        # Initialize board with Stockfish settings
+        enable_stockfish = self.show_stockfish_hints or self.game_mode == 'stockfish'
+        self.board = Board(enable_stockfish=enable_stockfish, stockfish_level=self.stockfish_difficulty)
+        
+        # If hints are disabled but mode is not stockfish, disable the stockfish display
+        if not self.show_stockfish_hints and self.game_mode != 'stockfish':
+            self.board._disable_stockfish()
+        
         self.dragger = Dragger()
         self.turn = 'white'
         self.promotion_pos = None
@@ -383,17 +611,24 @@ class Game:
                 self.show_menu()
                 self.handle_menu_animations()
                 self.handle_menu_events()
+            elif self.gamestate == GameState.SETTINGS:
+                self.show_settings()
+                self.handle_settings_events()
             elif self.gamestate == GameState.PLAYING:
                 self.show_bg()
                 self.show_last_move()
-                self.show_best_move() # shows best move by stockfish
+                if self.show_stockfish_hints and self.board.board_stockfish:
+                    self.show_best_move()
                 self.show_moves()
                 self.show_pieces()
                 if self.dragger.dragging:
                     self.dragger.update_blit(self.screen, self.piece_font)
                 self.handle_playing_events()
-                if self.random_mode and self.turn == 'black':
+                # Handle AI moves
+                if self.game_mode == 'random' and self.turn == 'black':
                     self.random_move()
+                elif self.game_mode == 'stockfish' and self.turn == 'black':
+                    self.stockfish_move()
             elif self.gamestate == GameState.PROMOTING:
                 self.show_bg()
                 self.show_pieces()
@@ -404,8 +639,7 @@ class Game:
                 self.show_pieces()
                 self.show_game_over()
                 self.handle_game_over_events()
-            elif self.gamestate == GameState.SETTINGS:
-                pass
+                
             pygame.display.update()
             self.clock.tick(60)
 
@@ -458,15 +692,56 @@ class Game:
 
     def show_best_move(self):
         if self.board.board_stockfish != None:
-            for pos in self.board.get_best_move():
-                color = (0, 200, 0, 100)
-                s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
-                s.fill(color)
-                cur_col = pos.x
-                cur_row = pos.y
-                if self.board_perspective == GameState.BLACK_PERSPECTIVE:
-                    cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
-                self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
+            best_move = self.board.get_best_move()
+            if best_move:
+                for pos in best_move:
+                    color = (0, 200, 0, 100)
+                    s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
+                    s.fill(color)
+                    cur_col = pos.x
+                    cur_row = pos.y
+                    if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+                        cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
+                    self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
+
+    def show_settings(self):
+        """Display the settings menu."""
+        self.screen.fill(MENU_BG_COLOR)
+        
+        # Title
+        title = pygame.font.Font(None, 74).render('Settings', True, self.menu_title_color)
+        self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 50))
+        
+        # Draw perspective label
+        persp_text = "Black Perspective" if not self.perspective_toggle.get_value() else "White Perspective"
+        self.perspective_toggle.label = persp_text
+        
+        # Draw all UI elements
+        for element in self.settings_ui_elements:
+            element.draw(self.screen)
+        
+        # Draw difficulty level text
+        diff_names = {0: "Beginner", 5: "Easy", 10: "Medium", 15: "Hard", 20: "Master"}
+        diff_level = self.difficulty_slider.get_value()
+        
+        # Find closest difficulty name
+        closest_key = min(diff_names.keys(), key=lambda x: abs(x - diff_level))
+        diff_text = diff_names[closest_key]
+        
+        diff_surface = self.menu_font.render(diff_text, True, COLOR_WHITE)
+        self.screen.blit(diff_surface, (self.difficulty_slider.rect.right + 80, self.difficulty_slider.rect.centery - 12))
+
+    def handle_settings_events(self):
+        """Handle events in settings menu."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.gamestate = GameState.MENU
+            for element in self.settings_ui_elements:
+                element.handle_event(event)
     
     # --- Event Handling ---
     def handle_playing_events(self):
@@ -546,7 +821,6 @@ class Game:
                 moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(col + 2, row)))
         return moves
 
-    # This method is without castling logic
     def _get_raw_moves(self, piece, row, col, board):
         moves = []
         def add_line_moves(directions):
@@ -628,25 +902,57 @@ class Game:
             self.game_over_message = f"Checkmate! {winner} wins." if self.is_in_check(self.turn, self.board) else "Stalemate! It's a draw."
     
     def random_move(self):
+        """Make a random move for the AI."""
         if self.turn == 'black' and not self.game_over_message:
             all_moves = [(p, m) for r in self.board.squares for p in r if p != 0 and p.color == 'black' for m in p.moves]
             if all_moves:
+                pygame.time.wait(500)  # Add small delay for better UX
                 self.make_move(*random.choice(all_moves))
             if self.gamestate == GameState.PROMOTING:
                 self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], random.choice(self.promotion_pieces))
                 self.gamestate = GameState.PLAYING
                 self.next_turn()
+
+    def stockfish_move(self):
+        """Make a move using Stockfish AI."""
+        if self.turn == 'black' and not self.game_over_message:
+            # Ensure Stockfish is enabled for this mode
+            if not self.board.board_stockfish:
+                self.board._enable_stockfish(self.stockfish_difficulty)
+            
+            # Get best move from Stockfish
+            best_move = self.board.get_best_move()
+            if best_move:
+                pygame.time.wait(500)  # Add delay for better UX
+                
+                # Find the piece at the initial position
+                initial_row, initial_col = int(best_move[0].y), int(best_move[0].x)
+                piece = self.board.squares[initial_row][initial_col]
+                
+                # Create and make the move
+                move = Move(best_move[0], best_move[1])
+                if piece and piece.color == 'black':
+                    self.make_move(piece, move)
+                    
+                    # Handle promotion if needed
+                    if self.gamestate == GameState.PROMOTING:
+                        # Stockfish usually promotes to queen
+                        self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], 'queen')
+                        self.gamestate = GameState.PLAYING
+                        self.next_turn()
     
     # --- UI and State Handlers ---
     def show_menu(self):
         self.screen.fill(MENU_BG_COLOR)
         title = pygame.font.Font(None, 74).render('Python Chess', True, self.menu_title_color)
-        self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 150))
+        self.screen.blit(title, (WIDTH/2 - title.get_width()/2, 100))
        
     def handle_menu_animations(self):
         self.mouse_position = pygame.mouse.get_pos()
-        self.pvp_rect = self.menu_text('1 vs 1 (Local)', (WIDTH//2, 350), 50)
-        self.pve_rect = self.menu_text('1 vs Random', (WIDTH//2, 450), 50)
+        self.pvp_rect = self.menu_text('1 vs 1 (Local)', (WIDTH//2, 300), 50)
+        self.pve_rect = self.menu_text('1 vs Random', (WIDTH//2, 380), 50)
+        self.stockfish_rect = self.menu_text('1 vs Stockfish', (WIDTH//2, 460), 50)
+        self.settings_rect = self.menu_text('Settings', (WIDTH//2, 540), 50)
       
     def menu_text(self, text, center, size):
         text_rect = pygame.font.Font(None, size).render(text, True, self.menu_font_color).get_rect(center=center)
@@ -668,11 +974,19 @@ class Game:
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.pvp_rect.collidepoint(event.pos): 
-                    self.random_mode, self.gamestate = False, GameState.PLAYING
+                    self.game_mode = 'pvp'
+                    self.gamestate = GameState.PLAYING
                     self.reset()
                 elif self.pve_rect.collidepoint(event.pos): 
-                    self.random_mode, self.gamestate = True, GameState.PLAYING
+                    self.game_mode = 'random'
+                    self.gamestate = GameState.PLAYING
                     self.reset()
+                elif self.stockfish_rect.collidepoint(event.pos):
+                    self.game_mode = 'stockfish'
+                    self.gamestate = GameState.PLAYING
+                    self.reset()
+                elif self.settings_rect.collidepoint(event.pos):
+                    self.gamestate = GameState.SETTINGS
 
     def show_promotion_menu(self):
         cur_row, cur_col = self.promotion_pos
@@ -681,14 +995,14 @@ class Game:
         cur_row = cur_row * SQSIZE if self.turn == self.get_board_perspective() else (cur_row - 3) * SQSIZE
 
         rect = pygame.Rect(cur_col * SQSIZE, cur_row, SQSIZE, SQSIZE * 4)
-        pygame.draw.rect(self.screen, MENU_BG_COLOR, rect, border_radius = 10)
+        pygame.draw.rect(self.screen, MENU_BG_COLOR, rect, border_radius=10)
         self.promotion_options = {}
         for i, name in enumerate(self.promotion_pieces):
             promo_rect = pygame.Rect(rect.x, rect.y + i * SQSIZE, SQSIZE, SQSIZE)
             self.promotion_options[name] = promo_rect
             char = UNICODE_PIECES[f'{self.turn[0]}_{name}']
             text_surf = self.piece_font.render(char, True, PIECE_COLORS[self.turn])
-            self.screen.blit(text_surf, text_surf.get_rect(center = promo_rect.center))
+            self.screen.blit(text_surf, text_surf.get_rect(center=promo_rect.center))
 
     def handle_promotion_events(self):
         for event in pygame.event.get():
