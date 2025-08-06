@@ -1,0 +1,12 @@
+{
+    "perspective": "white",
+    "show_hints": true,
+    "stockfish_difficulty": 20,
+    "board_theme": "classic",
+    "show_coordinates": true,
+    "show_last_move": true,
+    "auto_promote_queen": false,
+    "enable_undo": true,
+    "show_legal_moves": true,
+    "animation_speed": 0
+}
