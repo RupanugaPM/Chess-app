@@ -230,7 +230,7 @@ class CycleButton:
         if value in self.options:
             self.current_index = self.options.index(value)
 
-# --- Piece Classes (unchanged from original) ---
+# --- Piece Classes ---
 class Piece:
     def __init__(self, name, color, value):
         self.name = name
@@ -308,14 +308,17 @@ class Move:
 # --- GameSnapshot for undo/redo functionality ---
 class GameSnapshot:
     """Stores the complete state of the game for undo/redo."""
-    def __init__(self, board, turn, game_over_message=""):
+    def __init__(self, board, turn, game_over_message="", gamestate=GameState.PLAYING):
         self.board = copy.deepcopy(board)
         self.turn = turn
         self.game_over_message = game_over_message
+        self.gamestate = gamestate
+        # Store FEN for Stockfish synchronization
+        self.fen = board._board.fen() if board else None
 
 # --- Board Class with Stockfish improvements ---
 class Board:
-    def __init__(self, enable_stockfish=True, stockfish_level=10):
+    def __init__(self, enable_stockfish=True, stockfish_level=10, stockfish_path="stockfish-windows-x86-64-avx2.exe"):
         self.squares = [[0 for _ in range(COLS)] for _ in range(ROWS)]
         self.last_move = None
         self.move_list = []
@@ -331,24 +334,30 @@ class Board:
         self.promotion_move = None
         self.board_stockfish = None
         self.stockfish_level = stockfish_level
+        self.stockfish_path = stockfish_path
+        self.stockfish_enabled = enable_stockfish
         if enable_stockfish:
-            try:
-                self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
-                self.board_stockfish.set_skill_level(stockfish_level)
-            except:
-                print("Stockfish not found. AI features disabled.")
-                self.board_stockfish = None
+            self._enable_stockfish(stockfish_level)
 
     def _enable_stockfish(self, level=10):
         try:
-            self.board_stockfish = stockfish.Stockfish(path="stockfish-windows-x86-64-avx2.exe")
+            self.board_stockfish = stockfish.Stockfish(path=self.stockfish_path)
             self.stockfish_level = level
             self.board_stockfish.set_skill_level(level)
+            self.stockfish_enabled = True
         except:
+            print("Stockfish not found. AI features disabled.")
             self.board_stockfish = None
+            self.stockfish_enabled = False
 
     def _disable_stockfish(self):
         self.board_stockfish = None
+        self.stockfish_enabled = False
+
+    def restore_stockfish(self):
+        """Restore Stockfish if it was enabled before."""
+        if self.stockfish_enabled and not self.board_stockfish:
+            self._enable_stockfish(self.stockfish_level)
 
     def set_stockfish_level(self, level):
         self.stockfish_level = level
@@ -375,13 +384,28 @@ class Board:
         if self.board_stockfish:
             self.board_stockfish.set_fen_position(self._board.fen())
 
+    def clear_stockfish_cache(self):
+        """Clear Stockfish evaluation and best move cache."""
+        current_moves = len(self.move_list)
+        self.best_move_list_san = self.best_move_list_san[:current_moves]
+        self.best_move_list = self.best_move_list[:current_moves]
+        self.evaluation_list = self.evaluation_list[:current_moves]
+
+    def sync_from_fen(self, fen):
+        """Synchronize the internal chess board from a FEN string."""
+        self._board = chess.Board(fen)
+        self.clear_stockfish_cache()
+
     def get_evaluation(self):
         if self.board_stockfish == None:
             return None
         if len(self.evaluation_list) == len(self.move_list) + 1:
             return self.evaluation_list[-1]
         self.set_stockfish()
-        self.evaluation_list.append(self.board_stockfish.get_evaluation())
+        try:
+            self.evaluation_list.append(self.board_stockfish.get_evaluation())
+        except:
+            self.evaluation_list.append(None)
         return self.evaluation_list[-1]
 
     def get_best_move(self):
@@ -402,7 +426,10 @@ class Board:
         if len(self.best_move_list_san) == len(self.move_list) + 1:
             return self.best_move_list_san[-1]
         self.set_stockfish()
-        self.best_move_list_san.append(self.board_stockfish.get_best_move())
+        try:
+            self.best_move_list_san.append(self.board_stockfish.get_best_move())
+        except:
+            self.best_move_list_san.append(None)
         return self.best_move_list_san[-1]
 
     def push_move(self, move, making_move=True):
@@ -411,10 +438,7 @@ class Board:
         if making_move:
             self._board.push_san(move.san())
         # Clear the best move cache when a move is made
-        if len(self.best_move_list) > len(self.move_list):
-            self.best_move_list = self.best_move_list[:len(self.move_list)]
-            self.best_move_list_san = self.best_move_list_san[:len(self.move_list)]
-            self.evaluation_list = self.evaluation_list[:len(self.move_list)]
+        self.clear_stockfish_cache()
 
     def move(self, piece, move, making_move=True):
         if self.promoting:
@@ -481,6 +505,9 @@ class Board:
         new.last_move = copy.deepcopy(self.last_move)
         new._board = self._board.copy()
         new.board_stockfish = None
+        new.stockfish_enabled = self.stockfish_enabled
+        new.stockfish_level = self.stockfish_level
+        new.stockfish_path = self.stockfish_path
         new.best_move_list_san = copy.deepcopy(self.best_move_list_san)
         new.best_move_list = copy.deepcopy(self.best_move_list)
         new.evaluation_list = copy.deepcopy(self.evaluation_list)
@@ -552,7 +579,7 @@ class Game:
         # History for undo/redo
         self.history = []
         self.history_index = -1
-        self.max_history = 50
+        self.max_history = 100  # Increased for permanent undo
         
         # Menu colors
         self.menu_font_color = FONT_COLOR
@@ -576,6 +603,7 @@ class Game:
                 self.show_last_move = settings.get("show_last_move", True)
                 self.auto_promote_queen = settings.get("auto_promote_queen", False)
                 self.enable_undo = settings.get("enable_undo", True)
+                self.permanent_undo = settings.get("permanent_undo", True)
                 self.show_legal_moves = settings.get("show_legal_moves", True)
                 self.animation_speed = settings.get("animation_speed", 500)
                 print("Settings loaded successfully.")
@@ -589,6 +617,7 @@ class Game:
             self.show_last_move = True
             self.auto_promote_queen = False
             self.enable_undo = True
+            self.permanent_undo = True
             self.show_legal_moves = True
             self.animation_speed = 500
 
@@ -603,6 +632,7 @@ class Game:
             "show_last_move": self.last_move_toggle.get_value(),
             "auto_promote_queen": self.auto_promote_toggle.get_value(),
             "enable_undo": self.undo_toggle.get_value(),
+            "permanent_undo": self.permanent_undo_toggle.get_value(),
             "show_legal_moves": self.legal_moves_toggle.get_value(),
             "animation_speed": self.animation_slider.get_value()
         }
@@ -617,7 +647,7 @@ class Game:
         
         # Row positions
         y_start = 120
-        y_spacing = 50
+        y_spacing = 45
         
         row = 0
         
@@ -689,9 +719,17 @@ class Game:
         )
         row += 1
         
+        self.permanent_undo_toggle = ToggleButton(
+            left_col, y_start + (row * y_spacing), 60, 25,
+            "Permanent Undo",
+            self.permanent_undo,
+            self.menu_font
+        )
+        row += 1
+        
         # AI Settings
         self.difficulty_slider = Slider(
-            150, y_start + (row * y_spacing) + 20, 400, 15,
+            150, y_start + (row * y_spacing) + 15, 400, 15,
             0, 20, self.stockfish_difficulty,
             "Stockfish Difficulty",
             self.menu_font
@@ -738,6 +776,7 @@ class Game:
             self.legal_moves_toggle,
             self.auto_promote_toggle,
             self.undo_toggle,
+            self.permanent_undo_toggle,
             self.difficulty_slider,
             self.animation_slider,
             self.save_button,
@@ -756,12 +795,22 @@ class Game:
         self.show_last_move = self.last_move_toggle.get_value()
         self.auto_promote_queen = self.auto_promote_toggle.get_value()
         self.enable_undo = self.undo_toggle.get_value()
+        self.permanent_undo = self.permanent_undo_toggle.get_value()
         self.show_legal_moves = self.legal_moves_toggle.get_value()
         self.animation_speed = self.animation_slider.get_value()
         
         # Update board if it exists
-        if self.board and self.board.board_stockfish:
-            self.board.set_stockfish_level(self.stockfish_difficulty)
+        if self.board:
+            if self.board.board_stockfish:
+                self.board.set_stockfish_level(self.stockfish_difficulty)
+            
+            # Update Stockfish state based on settings
+            if self.show_stockfish_hints or self.game_mode == 'stockfish':
+                if not self.board.board_stockfish:
+                    self.board._enable_stockfish(self.stockfish_difficulty)
+            else:
+                if self.game_mode != 'stockfish':
+                    self.board._disable_stockfish()
         
         # Save to file
         self.save_settings()
@@ -786,17 +835,19 @@ class Game:
         self.last_move_toggle.set_value(True)
         self.auto_promote_toggle.set_value(False)
         self.undo_toggle.set_value(True)
+        self.permanent_undo_toggle.set_value(True)
         self.legal_moves_toggle.set_value(True)
         self.animation_slider.set_value(500)
 
     def save_game_state(self):
         """Save current game state to history."""
         if self.enable_undo:
-            # Remove any states after current index
-            self.history = self.history[:self.history_index + 1]
+            # If permanent undo is enabled, remove future states when making a new move
+            if self.permanent_undo and self.history_index < len(self.history) - 1:
+                self.history = self.history[:self.history_index + 1]
             
             # Add new state
-            snapshot = GameSnapshot(self.board, self.turn, self.game_over_message)
+            snapshot = GameSnapshot(self.board, self.turn, self.game_over_message, self.gamestate)
             self.history.append(snapshot)
             
             # Limit history size
@@ -809,25 +860,40 @@ class Game:
         """Undo the last move."""
         if self.enable_undo and self.history_index > 0:
             self.history_index -= 1
-            snapshot = self.history[self.history_index]
-            self.board = copy.deepcopy(snapshot.board)
-            self.turn = snapshot.turn
-            self.game_over_message = snapshot.game_over_message
-            self.gamestate = GameState.PLAYING if not self.game_over_message else GameState.GAME_OVER
-            self.calc_all_valid_moves(self.turn)
+            self.restore_game_state(self.history_index)
             print(f"Undone move. Now at move {self.history_index}")
 
     def redo_move(self):
         """Redo a previously undone move."""
-        if self.enable_undo and self.history_index < len(self.history) - 1:
+        if self.enable_undo and not self.permanent_undo and self.history_index < len(self.history) - 1:
             self.history_index += 1
-            snapshot = self.history[self.history_index]
+            self.restore_game_state(self.history_index)
+            print(f"Redone move. Now at move {self.history_index}")
+
+    def restore_game_state(self, index):
+        """Restore game state from history at given index."""
+        if 0 <= index < len(self.history):
+            snapshot = self.history[index]
             self.board = copy.deepcopy(snapshot.board)
             self.turn = snapshot.turn
             self.game_over_message = snapshot.game_over_message
-            self.gamestate = GameState.PLAYING if not self.game_over_message else GameState.GAME_OVER
+            
+            # Restore gamestate (allow undoing from game over)
+            if snapshot.game_over_message:
+                self.gamestate = GameState.GAME_OVER
+            else:
+                self.gamestate = GameState.PLAYING
+            
+            # Restore Stockfish connection if needed
+            if (self.show_stockfish_hints or self.game_mode == 'stockfish') and self.board:
+                self.board.restore_stockfish()
+                # Sync Stockfish with the restored FEN position
+                if snapshot.fen and self.board.board_stockfish:
+                    self.board.sync_from_fen(snapshot.fen)
+                    self.board.set_stockfish()
+            
+            # Recalculate valid moves for the current position
             self.calc_all_valid_moves(self.turn)
-            print(f"Redone move. Now at move {self.history_index}")
 
     def reset(self):
         """Reset the game with current settings."""
@@ -873,7 +939,7 @@ class Game:
                     self.show_board_coordinates()
                 if self.show_last_move:
                     self.show_last_move_highlight()
-                if self.show_stockfish_hints and self.board.board_stockfish:
+                if self.show_stockfish_hints and self.board and self.board.board_stockfish:
                     self.show_best_move()
                 if self.show_legal_moves:
                     self.show_moves()
@@ -938,6 +1004,8 @@ class Game:
             self.screen.blit(text, (WIDTH - 15, i * SQSIZE + 5))
 
     def show_pieces(self):
+        if not self.board:
+            return
         for row in range(ROWS):
             for col in range(COLS):
                 piece = self.board.squares[row][col]
@@ -962,7 +1030,7 @@ class Game:
                 self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
 
     def show_last_move_highlight(self):
-        if self.board.last_move:
+        if self.board and self.board.last_move:
             for pos in [self.board.last_move.initial, self.board.last_move.final]:
                 color = (200, 200, 0, 100)
                 s = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
@@ -974,7 +1042,7 @@ class Game:
                 self.screen.blit(s, (cur_col * SQSIZE, cur_row * SQSIZE))
 
     def show_best_move(self):
-        if self.board.board_stockfish != None:
+        if self.board and self.board.board_stockfish != None:
             best_move = self.board.get_best_move()
             if best_move:
                 for pos in best_move:
@@ -993,12 +1061,17 @@ class Game:
             text = f"Move: {self.history_index}/{len(self.history)-1}"
             if self.history_index > 0:
                 text += " [← Undo]"
-            if self.history_index < len(self.history) - 1:
+            if not self.permanent_undo and self.history_index < len(self.history) - 1:
                 text += " [Redo →]"
             
             surface = self.small_font.render(text, True, COLOR_GRAY)
-            # Position in top-left corner with padding
             self.screen.blit(surface, (10, 10))
+            
+            # Show permanent undo status
+            if self.permanent_undo:
+                perm_text = "Permanent Undo ON"
+                perm_surface = self.small_font.render(perm_text, True, COLOR_GREEN)
+                self.screen.blit(perm_surface, (10, 30))
 
     def show_settings(self):
         """Display the settings menu."""
@@ -1059,8 +1132,8 @@ class Game:
                 elif event.key == pygame.K_LEFT and self.enable_undo:
                     # Undo move
                     self.undo_move()
-                elif event.key == pygame.K_RIGHT and self.enable_undo:
-                    # Redo move
+                elif event.key == pygame.K_RIGHT and self.enable_undo and not self.permanent_undo:
+                    # Redo move (only if permanent undo is off)
                     self.redo_move()
                     
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -1089,6 +1162,23 @@ class Game:
                 if move in self.dragger.piece.moves: 
                     self.make_move(self.dragger.piece, move)
                 self.dragger.undrag_piece()
+    
+    def handle_game_over_events(self):
+        """Handle events when game is over."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT and self.enable_undo:
+                    # Allow undoing even from game over state
+                    self.undo_move()
+                elif event.key == pygame.K_ESCAPE:
+                    self.gamestate = GameState.MENU
+                    self.reset()
+            if event.type == pygame.MOUSEBUTTONDOWN: 
+                self.gamestate = GameState.MENU
+                self.reset()
 
     # --- Game Logic Methods ---
     def make_move(self, piece, move):
@@ -1107,6 +1197,8 @@ class Game:
         self.save_game_state()
 
     def calc_all_valid_moves(self, color):
+        if not self.board:
+            return
         for row in range(ROWS):
             for col in range(COLS):
                 piece = self.board.squares[row][col]
@@ -1358,18 +1450,9 @@ class Game:
         s.fill(GAME_OVER_BG_COLOR)
         self.screen.blit(s, (0, 0))
         text = pygame.font.Font(None, 60).render(self.game_over_message, True, FONT_COLOR)
-        prompt = pygame.font.Font(None, 40).render("Click to return to menu.", True, FONT_COLOR)
+        prompt = pygame.font.Font(None, 40).render("Click to return to menu or ← to undo", True, FONT_COLOR)
         self.screen.blit(text, text.get_rect(center=(WIDTH/2, HEIGHT/2 - 20)))
         self.screen.blit(prompt, prompt.get_rect(center=(WIDTH/2, HEIGHT/2 + 30)))
-
-    def handle_game_over_events(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT: 
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN: 
-                self.gamestate = GameState.MENU
-                self.reset()
 
 if __name__ == '__main__':
     game = Game()

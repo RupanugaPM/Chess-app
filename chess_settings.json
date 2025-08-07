@@ -7,6 +7,7 @@
     "show_last_move": true,
     "auto_promote_queen": false,
     "enable_undo": true,
+    "permanent_undo": true,
     "show_legal_moves": true,
     "animation_speed": 0
 }
