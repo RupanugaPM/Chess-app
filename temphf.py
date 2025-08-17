@@ -1268,8 +1268,9 @@ class Game:
                 overlay = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
                 for i in range(SQSIZE // 4):
                     alpha = 20 - (i * 2)
-                    pygame.draw.rect(overlay, (255, 255, 255, alpha), 
-                                   (i, i, SQSIZE - 2*i, SQSIZE - 2*i), 1)
+                    rect = pygame.Rect(i, i, SQSIZE - 2*i, SQSIZE - 2*i)
+                    pygame.draw.rect(overlay, (255, 255, 255), 
+                                   rect)
                 self.screen.blit(overlay, rect)
 
     def show_board_coordinates(self):
@@ -1861,4 +1862,278 @@ class Game:
             add_line_moves([(1,0), (-1,0), (0,1), (0,-1)])
             
         elif isinstance(piece, Queen): 
-            add_line_moves([(1,1), (
+            add_line_moves([(1,1), (1,-1), (-1,1), (-1,-1), (1,0), (-1,0), (0,1), (0,-1)])
+            
+        elif isinstance(piece, King):
+            for dr, dc in [(dr, dc) for dr in [-1,0,1] for dc in [-1,0,1] if (dr, dc) != (0,0)]:
+                r, c = row + dr, col + dc
+                if 0 <= r < ROWS and 0 <= c < COLS and (board.squares[r][c] == 0 or board.squares[r][c].color != piece.color):
+                    moves.append(Move(pygame.math.Vector2(col, row), pygame.math.Vector2(c, r)))
+                    
+        return moves
+
+    def is_in_check(self, color, board_state):
+        king_pos = self.find_king(color, board_state)
+        return self.is_in_check_at(color, king_pos[0], king_pos[1], board_state) if king_pos else False
+
+    def is_in_check_at(self, color, row, col, board_state):
+        opponent_color = 'white' if color == 'black' else 'black'
+        for r in range(ROWS):
+            for c in range(COLS):
+                piece = board_state.squares[r][c]
+                if piece != 0 and piece.color == opponent_color:
+                    raw_moves = self._get_raw_moves(piece, r, c, board_state)
+                    for move in raw_moves:
+                        if int(move.final.y) == row and int(move.final.x) == col:
+                            return True
+        return False
+
+    def find_king(self, color, board_state):
+        for r in range(ROWS):
+            for c in range(COLS):
+                if isinstance(board_state.squares[r][c], King) and board_state.squares[r][c].color == color:
+                    return (r, c)
+        return None
+        
+    def check_game_over(self):
+        if not any(p.moves for row in self.board.squares for p in row if p != 0 and p.color == self.turn):
+            self.gamestate = GameState.GAME_OVER
+            winner = 'Black' if self.turn == 'white' else 'White'
+            self.game_over_message = f"Checkmate! {winner} wins." if self.is_in_check(self.turn, self.board) else "Stalemate! It's a draw."
+    
+    def auto_promote(self):
+        """Automatically promote to queen."""
+        self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], 'queen')
+        self.gamestate = GameState.PLAYING
+        self.next_turn()
+
+    def random_move(self):
+        """Make a random move for the AI."""
+        if self.turn == 'black' and not self.game_over_message:
+            all_moves = [(p, m) for r in self.board.squares for p in r if p != 0 and p.color == 'black' for m in p.moves]
+            if all_moves:
+                pygame.time.wait(self.animation_speed)
+                self.make_move(*random.choice(all_moves))
+            if self.gamestate == GameState.PROMOTING:
+                self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], random.choice(self.promotion_pieces))
+                self.gamestate = GameState.PLAYING
+                self.next_turn()
+
+    def stockfish_move(self):
+        """Make a move using Stockfish AI."""
+        if self.turn == 'black' and not self.game_over_message:
+            if not self.board.board_stockfish:
+                self.board._enable_stockfish(self.stockfish_difficulty)
+            
+            best_move = self.board.get_best_move()
+            if best_move:
+                pygame.time.wait(self.animation_speed)
+                
+                initial_row, initial_col = int(best_move[0].y), int(best_move[0].x)
+                piece = self.board.squares[initial_row][initial_col]
+                
+                move = Move(best_move[0], best_move[1])
+                if piece and piece.color == 'black':
+                    self.make_move(piece, move)
+                    
+                    if self.gamestate == GameState.PROMOTING:
+                        self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], 'queen')
+                        self.gamestate = GameState.PLAYING
+                        self.next_turn()
+    
+    # --- UI and State Handlers ---
+    def show_menu(self):
+        """Display enhanced main menu."""
+        # Animated gradient background
+        for i in range(HEIGHT):
+            time_offset = pygame.time.get_ticks() * 0.001
+            color_intensity = int(49 + math.sin(time_offset + i * 0.01) * 10)
+            pygame.draw.line(self.screen, (color_intensity, color_intensity - 3, color_intensity - 6), 
+                           (0, i), (WIDTH, i))
+        
+        # Title with glow effect
+        glow_intensity = int(128 + math.sin(pygame.time.get_ticks() * 0.003) * 127)
+        glow_color = (glow_intensity, glow_intensity, glow_intensity // 2)
+        
+        # Draw title glow
+        for offset in range(5, 0, -1):
+            alpha = 50 - offset * 10
+            glow_surf = pygame.font.Font(None, 74 + offset * 2).render('Enhanced Chess', True, (*glow_color, alpha))
+            glow_rect = glow_surf.get_rect(center=(WIDTH/2, 100))
+            self.screen.blit(glow_surf, glow_rect)
+        
+        # Main title
+        title = pygame.font.Font(None, 74).render('Enhanced Chess', True, self.menu_title_color)
+        title_rect = title.get_rect(center=(WIDTH/2, 100))
+        self.screen.blit(title, title_rect)
+        
+        # Subtitle
+        subtitle = self.menu_font.render('Professional Edition', True, COLOR_GRAY)
+        subtitle_rect = subtitle.get_rect(center=(WIDTH/2, 150))
+        self.screen.blit(subtitle, subtitle_rect)
+       
+    def handle_menu_animations(self):
+        """Handle menu button animations."""
+        self.mouse_position = pygame.mouse.get_pos()
+        
+        # Create animated menu items with icons
+        menu_items = [
+            ('♔ 1 vs 1 (Local)', (WIDTH//2, 250)),
+            ('🎲 1 vs Random', (WIDTH//2, 320)),
+            ('🤖 1 vs Stockfish', (WIDTH//2, 390)),
+            ('✏️ Position Editor', (WIDTH//2, 460)),
+            ('⚙️ Settings', (WIDTH//2, 530)),
+            ('❌ Exit', (WIDTH//2, 600))
+        ]
+        
+        self.menu_rects = []
+        for text, pos in menu_items:
+            rect = self.menu_text(text, pos, 45)
+            self.menu_rects.append(rect)
+      
+    def menu_text(self, text, center, size):
+        """Draw menu text with hover effects."""
+        text_rect = pygame.font.Font(None, size).render(text, True, self.menu_font_color).get_rect(center=center)
+        
+        if text_rect.collidepoint(self.mouse_position):
+            # Draw hover background
+            bg_rect = text_rect.inflate(40, 20)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(bg_surface, (255, 255, 255, 30), bg_surface.get_rect(), border_radius=10)
+            self.screen.blit(bg_surface, bg_rect)
+            
+            # Draw text with animation
+            offset = math.sin(pygame.time.get_ticks() * 0.005) * 3
+            self.handle_text(text, self.menu_font_animated_color, (center[0] + offset, center[1]), size)
+        else:
+            self.handle_text(text, self.menu_font_color, center, size)
+        
+        return text_rect
+
+    def handle_text(self, text, color, center, size):
+        """Draw text with shadow."""
+        # Draw shadow
+        shadow = pygame.font.Font(None, size).render(text, True, (30, 30, 30))
+        shadow_rect = shadow.get_rect(center=(center[0] + 2, center[1] + 2))
+        self.screen.blit(shadow, shadow_rect)
+        
+        # Draw main text
+        text_surface = pygame.font.Font(None, size).render(text, True, color)
+        text_rect = text_surface.get_rect(center=center)
+        self.screen.blit(text_surface, text_rect)
+        
+    def handle_menu_events(self):
+        """Handle menu click events."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if len(self.menu_rects) >= 6:
+                    if self.menu_rects[0].collidepoint(event.pos):  # 1 vs 1
+                        self.game_mode = 'pvp'
+                        self.gamestate = GameState.PLAYING
+                        self.reset()
+                    elif self.menu_rects[1].collidepoint(event.pos):  # vs Random
+                        self.game_mode = 'random'
+                        self.gamestate = GameState.PLAYING
+                        self.reset()
+                    elif self.menu_rects[2].collidepoint(event.pos):  # vs Stockfish
+                        self.game_mode = 'stockfish'
+                        self.gamestate = GameState.PLAYING
+                        self.reset()
+                    elif self.menu_rects[3].collidepoint(event.pos):  # Position Editor
+                        self.gamestate = GameState.POSITION_EDITOR
+                    elif self.menu_rects[4].collidepoint(event.pos):  # Settings
+                        self.gamestate = GameState.SETTINGS
+                    elif self.menu_rects[5].collidepoint(event.pos):  # Exit
+                        pygame.quit()
+                        sys.exit()
+
+    def show_promotion_menu(self):
+        """Display promotion menu with enhanced visuals."""
+        cur_row, cur_col = self.promotion_pos
+        if self.board_perspective == GameState.BLACK_PERSPECTIVE:
+            cur_row, cur_col = rotate_matrix_index(cur_row, cur_col, ROWS, COLS, 2)
+        cur_row = cur_row * SQSIZE if self.turn == self.get_board_perspective() else (cur_row - 3) * SQSIZE
+
+        # Draw background with transparency
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 100))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw promotion panel
+        rect = pygame.Rect(cur_col * SQSIZE - 10, cur_row - 10, SQSIZE + 20, SQSIZE * 4 + 20)
+        pygame.draw.rect(self.screen, MENU_BG_COLOR, rect, border_radius=15)
+        pygame.draw.rect(self.screen, COLOR_WHITE, rect, 3, border_radius=15)
+        
+        self.promotion_options = {}
+        for i, name in enumerate(self.promotion_pieces):
+            promo_rect = pygame.Rect(cur_col * SQSIZE, cur_row + i * SQSIZE, SQSIZE, SQSIZE)
+            self.promotion_options[name] = promo_rect
+            
+            # Hover effect
+            if promo_rect.collidepoint(pygame.mouse.get_pos()):
+                pygame.draw.rect(self.screen, (100, 100, 200, 100), promo_rect, border_radius=5)
+            
+            char = UNICODE_PIECES[f'{self.turn[0]}_{name}']
+            text_surf = self.piece_font.render(char, True, PIECE_COLORS[self.turn])
+            self.screen.blit(text_surf, text_surf.get_rect(center=promo_rect.center))
+
+    def handle_promotion_events(self):
+        """Handle promotion selection."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                for name, rect in self.promotion_options.items():
+                    if rect.collidepoint(event.pos):
+                        self.board.promote_pawn(self.promotion_pos[0], self.promotion_pos[1], name)
+                        self.gamestate = GameState.PLAYING
+                        self.next_turn()
+                        return     
+
+    def show_game_over(self):
+        """Display enhanced game over screen."""
+        # Dark overlay with gradient
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        for i in range(HEIGHT):
+            alpha = int(150 * (1 - abs(i - HEIGHT/2) / (HEIGHT/2)))
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (0, i), (WIDTH, i))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Main message with glow
+        for offset in range(5, 0, -1):
+            glow_alpha = 100 - offset * 20
+            glow_surf = pygame.font.Font(None, 60 + offset * 2).render(
+                self.game_over_message, True, (255, 255, 255, glow_alpha))
+            glow_rect = glow_surf.get_rect(center=(WIDTH/2, HEIGHT/2 - 20))
+            self.screen.blit(glow_surf, glow_rect)
+        
+        text = pygame.font.Font(None, 60).render(self.game_over_message, True, FONT_COLOR)
+        text_rect = text.get_rect(center=(WIDTH/2, HEIGHT/2 - 20))
+        self.screen.blit(text, text_rect)
+        
+        # Instructions
+        prompt = pygame.font.Font(None, 35).render("Click to return to menu | ← to undo", True, COLOR_LIGHT_GRAY)
+        prompt_rect = prompt.get_rect(center=(WIDTH/2, HEIGHT/2 + 40))
+        self.screen.blit(prompt, prompt_rect)
+        
+        # Display final evaluation if available
+        if self.board and self.board.board_stockfish and self.show_evaluation_bar:
+            eval_text = "Final Position: "
+            evaluation = self.board.get_evaluation()
+            if evaluation:
+                if evaluation['type'] == 'mate':
+                    eval_text += f"Mate in {abs(evaluation['value'])}"
+                else:
+                    eval_text += f"{evaluation['value']/100:+.2f}"
+            
+            eval_surface = self.menu_font.render(eval_text, True, EVAL_TEXT_COLOR)
+            eval_rect = eval_surface.get_rect(center=(WIDTH/2, HEIGHT/2 + 90))
+            self.screen.blit(eval_surface, eval_rect)
+
+if __name__ == '__main__':
+    game = Game()
+    game.mainloop()
